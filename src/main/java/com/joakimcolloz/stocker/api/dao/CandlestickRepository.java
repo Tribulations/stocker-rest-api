@@ -11,6 +11,8 @@ import java.util.List;
  * Repository interface for {@link Candlestick} entities.
  * <p>
  * Includes a custom query method to find candlesticks by stock symbol.
+ * Exposes read-only REST endpoints via Spring Data REST
+ * with custom configuration defined in {@link com.joakimcolloz.stocker.api.config.RestRepositoryConfig}.
  *
  * @author Joakim Colloz
  * @version 1.0
