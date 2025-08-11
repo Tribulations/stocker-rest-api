@@ -20,7 +20,6 @@ import static com.joakimcolloz.stocker.api.security.SecurityConstants.API_KEY_HE
  * Spring Security filter that authenticates incoming requests using an API key.
  * <p>
  * Validates the API key found in the X-API-Key header against a configured set of valid keys.
- * Skips Swagger endpoints to allow unauthenticated access.
  * Requires a valid API key for /api/** endpoints.
  */
 @Component
@@ -68,6 +67,9 @@ public class ApiKeyAuthenticationFilter extends OncePerRequestFilter {
     /**
      * Specifies endpoints that should bypass this filter.
      * Excludes health/info and Swagger UI and docs endpoints.
+     * This method seems not strictly necessary as we permit these paths in
+     * {@link com.joakimcolloz.stocker.api.config.ApiKeySecurityConfig},
+     * but it's kept for now due to possible performance optimization.
      *
      * @param request HTTP servlet request
      * @return true if the filter should not be applied to the request
@@ -75,9 +77,10 @@ public class ApiKeyAuthenticationFilter extends OncePerRequestFilter {
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
         String path = request.getRequestURI();
-        // Skip actuator and Swagger endpoints
         return path.startsWith("/swagger-ui") ||
-               path.startsWith("/v3/api-docs") ||
-               path.startsWith("/api-docs");
+                path.startsWith("/v3/api-docs") ||
+                path.startsWith("/api-docs") ||
+                path.startsWith("/actuator/health") ||
+                path.startsWith("/actuator/info");
     }
 }

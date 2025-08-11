@@ -16,7 +16,7 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
  * Spring Security configuration for stateless API key authentication.
  * <p>
  * Registers a custom {@link ApiKeyAuthenticationFilter}, disables session-based authentication mechanisms,
- * and permits public access to Swagger endpoints. All other API requests under <code>/api/**</code>
+ * and permits public access to actuator and Swagger endpoints. All other API requests under <code>/api/**</code>
  * require a valid API key.
  *
  * <ul>
@@ -60,7 +60,8 @@ public class ApiKeySecurityConfig {
                 .addFilterBefore(apiKeyAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
                 .authorizeHttpRequests(authz -> authz
                         // Permit actuator and Swagger endpoints
-                        .requestMatchers("/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs/**", "/api-docs/**")
+                        .requestMatchers("/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs/**",
+                                "/api-docs/**", "/actuator/health", "/actuator/info")
                         .permitAll()
                         // Require authentication for API endpoints
                         .requestMatchers("/api/**").authenticated()
