@@ -7,6 +7,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.api.Nested;
 
 import org.springframework.beans.factory.annotation.Autowired;
 
@@ -92,51 +93,63 @@ public class CandlestickApiIntegrationTest {
                 1753124400L, "BOL.ST"));
     }
 
-    @Test
-    @DisplayName("Should return 401 when no API key provided")
-    void testUnauthorizedWithoutApiKey() throws Exception {
-        mockMvc.perform(get("/api/candlesticks"))
-                .andExpect(status().isUnauthorized());
-    }
 
-    @Test
-    @DisplayName("Should return 200 when valid API key provided")
-    void testAuthorizedWithValidApiKey() throws Exception {
-        mockMvc.perform(get("/api/candlesticks")
-                .header("X-API-Key", "test-api-key"))
-                .andExpect(status().isOk());
-    }
+    /**
+     * Tests related to API key authentication and authorization.
+     */
+    @Nested
+    @DisplayName("API Key Authentication Tests")
+    class ApiKeyAuthenticationTests {
+        @Test
+        @DisplayName("Should return 401 when no API key provided")
+        void testUnauthorizedWithoutApiKey() throws Exception {
+            mockMvc.perform(get("/api/candlesticks"))
+                    .andExpect(status().isUnauthorized());
+        }
 
-    @Test
-    @DisplayName("Should return 401 when invalid API key provided")
-    void testUnauthorizedWithInvalidApiKey() throws Exception {
-        mockMvc.perform(get("/api/candlesticks")
-                .header("X-API-Key", "invalid-key"))
-                .andExpect(status().isUnauthorized());
+        @Test
+        @DisplayName("Should return 200 when valid API key provided")
+        void testAuthorizedWithValidApiKey() throws Exception {
+            mockMvc.perform(get("/api/candlesticks")
+                    .header("X-API-Key", "test-api-key"))
+                    .andExpect(status().isOk());
+        }
+
+        @Test
+        @DisplayName("Should return 401 when invalid API key provided")
+        void testUnauthorizedWithInvalidApiKey() throws Exception {
+            mockMvc.perform(get("/api/candlesticks")
+                    .header("X-API-Key", "invalid-key"))
+                    .andExpect(status().isUnauthorized());
+        }
     }
 
     /**
      * Tests for API functional correctness (retrieving and filtering candlestick data).
      */
-    @Test
-    @DisplayName("Should return all candlesticks with valid API key")
-    void testGetAllCandlesticksWithApiKey() throws Exception {
-        mockMvc.perform(get("/api/candlesticks")
-                        .header("X-API-Key", "test-api-key"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$._embedded.candlesticks[0].open").value(100.0))
-                .andExpect(jsonPath("$._embedded.candlesticks[1].close").value(104.0))
-                .andExpect(jsonPath("$._embedded.candlesticks[0].symbol").value("BOL.ST"));
-    }
+    @Nested
+    @DisplayName("API Functionality Tests")
+    class ApiFunctionalityTests {
+        @Test
+        @DisplayName("Should return all candlesticks with valid API key")
+        void testGetAllCandlesticksWithApiKey() throws Exception {
+            mockMvc.perform(get("/api/candlesticks")
+                    .header("X-API-Key", "test-api-key"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$._embedded.candlesticks[0].open").value(100.0))
+                    .andExpect(jsonPath("$._embedded.candlesticks[1].close").value(104.0))
+                    .andExpect(jsonPath("$._embedded.candlesticks[0].symbol").value("BOL.ST"));
+        }
 
-    @Test
-    @DisplayName("Should filter candlesticks by symbol with valid API key")
-    void testGetCandlesticksBySymbolWithApiKey() throws Exception {
-        mockMvc.perform(get("/api/candlesticks/search/by-symbol")
-                        .param("symbol", "BOL.ST")
-                        .header("X-API-Key", "test-api-key"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$._embedded.candlesticks").isArray())
-                .andExpect(jsonPath("$._embedded.candlesticks[0].symbol").value("BOL.ST"));
+        @Test
+        @DisplayName("Should filter candlesticks by symbol with valid API key")
+        void testGetCandlesticksBySymbolWithApiKey() throws Exception {
+            mockMvc.perform(get("/api/candlesticks/search/by-symbol")
+                    .param("symbol", "BOL.ST")
+                    .header("X-API-Key", "test-api-key"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$._embedded.candlesticks").isArray())
+                    .andExpect(jsonPath("$._embedded.candlesticks[0].symbol").value("BOL.ST"));
+        }
     }
 }
