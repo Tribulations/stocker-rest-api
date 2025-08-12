@@ -28,6 +28,22 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 
+/**
+ * Integration tests for the {@code /api/candlesticks} REST API using {@link MockMvc} and Testcontainers.
+ * <p>
+ * Validates API key authentication and candlestick-related functionality against a PostgreSQL instance.
+ * Tests run under the {@code "test"} profile and initialize the database via {@code testdb.sql} script.
+ *
+ * <p>Includes:
+ * <ul>
+ *     <li>Authentication tests for API key security</li>
+ *     <li>Functional tests for candlestick retrieval and symbol-based filtering</li>
+ * </ul>
+ *
+ * <p>Dynamic environment properties are configured using {@link DynamicPropertySource}.
+ *
+ * @see CandlestickRepository
+ */
 @SpringBootTest
 @AutoConfigureMockMvc
 @Testcontainers
