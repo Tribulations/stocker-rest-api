@@ -69,4 +69,12 @@ public class CandlestickApiIntegrationTest {
         mockMvc.perform(get("/api/candlesticks"))
                 .andExpect(status().isUnauthorized());
     }
+
+    @Test
+    @DisplayName("Should return 200 when valid API key provided")
+    void testAuthorizedWithValidApiKey() throws Exception {
+        mockMvc.perform(get("/api/candlesticks")
+                .header("X-API-Key", "test-api-key"))
+                .andExpect(status().isOk());
+    }
 }
