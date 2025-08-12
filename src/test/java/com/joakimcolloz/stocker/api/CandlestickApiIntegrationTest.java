@@ -26,6 +26,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -96,5 +97,30 @@ public class CandlestickApiIntegrationTest {
         mockMvc.perform(get("/api/candlesticks")
                 .header("X-API-Key", "invalid-key"))
                 .andExpect(status().isUnauthorized());
+    }
+
+    /**
+     * Tests for API functional correctness (retrieving and filtering candlestick data).
+     */
+    @Test
+    @DisplayName("Should return all candlesticks with valid API key")
+    void testGetAllCandlesticksWithApiKey() throws Exception {
+        mockMvc.perform(get("/api/candlesticks")
+                        .header("X-API-Key", "test-api-key"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$._embedded.candlesticks[0].open").value(100.0))
+                .andExpect(jsonPath("$._embedded.candlesticks[1].close").value(104.0))
+                .andExpect(jsonPath("$._embedded.candlesticks[0].symbol").value("BOL.ST"));
+    }
+
+    @Test
+    @DisplayName("Should filter candlesticks by symbol with valid API key")
+    void testGetCandlesticksBySymbolWithApiKey() throws Exception {
+        mockMvc.perform(get("/api/candlesticks/search/by-symbol")
+                        .param("symbol", "BOL.ST")
+                        .header("X-API-Key", "test-api-key"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$._embedded.candlesticks").isArray())
+                .andExpect(jsonPath("$._embedded.candlesticks[0].symbol").value("BOL.ST"));
     }
 }
