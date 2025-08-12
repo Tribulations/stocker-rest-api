@@ -77,4 +77,12 @@ public class CandlestickApiIntegrationTest {
                 .header("X-API-Key", "test-api-key"))
                 .andExpect(status().isOk());
     }
+
+    @Test
+    @DisplayName("Should return 401 when invalid API key provided")
+    void testUnauthorizedWithInvalidApiKey() throws Exception {
+        mockMvc.perform(get("/api/candlesticks")
+                .header("X-API-Key", "invalid-key"))
+                .andExpect(status().isUnauthorized());
+    }
 }
