@@ -34,6 +34,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @ExtendWith(SpringExtension.class)
 @DisplayName("Candlestick REST API Integration Tests")
 public class CandlestickApiIntegrationTest {
+    /**
+     * PostgreSQL container managed by Testcontainers for integration testing.
+     * Initializes schema and data using the {@code testdb.sql} script located in the test resources directory.
+     */
     @Container
     public static PostgreSQLContainer<?> postgreSQLContainer = new PostgreSQLContainer<>("postgres:13-alpine")
             .withDatabaseName("testdb")
@@ -41,6 +45,11 @@ public class CandlestickApiIntegrationTest {
             .withPassword("test")
             .withInitScript("testdb.sql");
 
+    /**
+     * Dynamically sets Spring datasource properties using the Testcontainer PostgreSQL instance.
+     *
+     * @param registry property registry for the Spring test context
+     */
     @DynamicPropertySource
     static void configureProperties(DynamicPropertyRegistry registry) {
         registry.add("spring.datasource.url", postgreSQLContainer::getJdbcUrl);
@@ -54,6 +63,9 @@ public class CandlestickApiIntegrationTest {
     @Autowired
     private CandlestickRepository candlestickRepository;
 
+    /**
+     * Clears and inserts test candlestick data into the database before each test.
+     */
     @BeforeEach
     void setUp() {
         candlestickRepository.deleteAll();
