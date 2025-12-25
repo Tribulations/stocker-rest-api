@@ -2,6 +2,7 @@ package com.joakimcolloz.stocker.api.dao;
 
 import com.joakimcolloz.stocker.api.entity.Candlestick;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.data.rest.core.annotation.RestResource;
 
@@ -30,4 +31,24 @@ public interface CandlestickRepository extends JpaRepository<Candlestick, Intege
      */
     @RestResource(path = "by-symbol", rel = "by-symbol")
     List<Candlestick> findBySymbol(@Param("symbol") String symbol);
+
+    /**
+     * Retrieves all candlesticks within a timestamp range, ordered by symbol and timestamp.
+     *
+     * @param startTimestamp start of the range (inclusive)
+     * @param endTimestamp   end of the range (inclusive)
+     * @return list of candlesticks in the specified range
+     */
+    List<Candlestick> findByTimestampBetweenOrderBySymbolAscTimestampAsc(
+            long startTimestamp,
+            long endTimestamp
+    );
+
+    /**
+     * Retrieves all distinct stock symbols in the database.
+     *
+     * @return list of unique symbols
+     */
+    @Query("SELECT DISTINCT c.symbol FROM Candlestick c ORDER BY c.symbol")
+    List<String> findAllDistinctSymbols();
 }
