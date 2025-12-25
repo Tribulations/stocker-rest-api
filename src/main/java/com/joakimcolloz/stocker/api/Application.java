@@ -40,9 +40,10 @@ import static com.joakimcolloz.stocker.api.security.SecurityConstants.API_KEY_SC
 		security = @SecurityRequirement(name = API_KEY_SCHEME)
 )
 // Disable auto-generated passwords and login forms (using API keys instead)
-@SpringBootApplication(exclude = {
-		UserDetailsServiceAutoConfiguration.class
-})
+@SpringBootApplication(
+		exclude = {UserDetailsServiceAutoConfiguration.class},
+		scanBasePackages = {"com.joakimcolloz.stocker"}
+)
 public class Application {
 	public static void main(String[] args) {
 		loadEnvironmentVariables();

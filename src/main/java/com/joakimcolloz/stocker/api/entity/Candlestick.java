@@ -6,12 +6,15 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import lombok.Getter;
+import lombok.Setter;
 
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 
 /**
+ * TODO: currently the class does not use OHLCV. Change order of fields to match OHLCV.
  * Represents a candlestick (OHLCV) data point for a stock symbol.
  * <p>
  * Maps to the {@code stock_prices_1day} table in the {@code stock_prices_schema} schema.
@@ -21,6 +24,8 @@ import java.time.format.DateTimeFormatter;
  * @version 1.0
  */
 @Entity
+@Getter
+@Setter
 @Table(name = "stock_prices_1day", schema = "stock_prices_schema")
 public class Candlestick {
     /**
@@ -97,71 +102,6 @@ public class Candlestick {
         this.high = high;
         this.volume = volume;
         this.timestamp = timestamp;
-        this.symbol = symbol;
-    }
-
-    // Getters and setters
-    public int getId() {
-        return id;
-    }
-
-    public void setId(int id) {
-        this.id = id;
-    }
-
-    public double getOpen() {
-        return open;
-    }
-
-    public void setOpen(double open) {
-        this.open = open;
-    }
-
-    public double getClose() {
-        return close;
-    }
-
-    public void setClose(double close) {
-        this.close = close;
-    }
-
-    public double getLow() {
-        return low;
-    }
-
-    public void setLow(double low) {
-        this.low = low;
-    }
-
-    public double getHigh() {
-        return high;
-    }
-
-    public void setHigh(double high) {
-        this.high = high;
-    }
-
-    public long getVolume() {
-        return volume;
-    }
-
-    public void setVolume(long volume) {
-        this.volume = volume;
-    }
-
-    public long getTimestamp() {
-        return timestamp;
-    }
-
-    public void setTimestamp(long timestamp) {
-        this.timestamp = timestamp;
-    }
-
-    public String getSymbol() {
-        return symbol;
-    }
-
-    public void setSymbol(String symbol) {
         this.symbol = symbol;
     }
 
