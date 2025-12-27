@@ -9,7 +9,6 @@ import com.joakimcolloz.stocker.api.entity.Candlestick;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.Nested;
 
 // Spring dependency injection for test beans
@@ -25,13 +24,15 @@ import org.springframework.test.context.ActiveProfiles;
 // Registry for adding properties at runtime (used with Testcontainers)
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
-import org.springframework.test.context.junit.jupiter.SpringExtension;
 import org.springframework.test.web.servlet.MockMvc;
 
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.Set;
 
 // Hamcrest matchers - third-party assertion library for readable, expressive test conditions
@@ -148,22 +149,26 @@ public class AnalysisApiIntegrationTest {
 
         // Regular candle (not a hammer)
         candlestickRepository.save(new Candlestick(
-                100, 102, 99, 103, 5000, 1753038000L, "BOL.ST"));
+                100, 102, 99, 103, 5000,
+                humanReadableToTimestamp("2025-07-20 09:00:00"), "BOL.ST"));
 
         // Hammer pattern: long lower shadow, small body, tiny upper shadow
         // Body = |Close - Open| = |100 - 98| = 2
         // Lower shadow = min(Open, Close) - Low = 98 - 90 = 8
         // Upper shadow = High - max(Open, Close) = 100.5 - 100 = 0.5
         candlestickRepository.save(new Candlestick(
-                98, 100, 90, 100.5, 6000, 1753124400L, "BOL.ST"));
+                98, 100, 90, 100.5, 6000,
+                humanReadableToTimestamp("2025-07-21 09:00:00"), "BOL.ST"));
 
         // Another hammer for different symbol
         candlestickRepository.save(new Candlestick(
-                95, 97, 85, 97.5, 7000, 1753210800L, "ABB.ST"));
+                95, 97, 85, 97.5, 7000,
+                humanReadableToTimestamp("2025-07-20 09:00:00"), "ABB.ST"));
 
         // Not a hammer (balanced shadows)
         candlestickRepository.save(new Candlestick(
-                100, 105, 95, 110, 8000, 1753297200L, "BOL.ST"));
+                100, 105, 95, 110, 8000,
+                humanReadableToTimestamp("2025-07-22 09:00:00"), "BOL.ST"));
     }
 
     /**
@@ -315,8 +320,8 @@ public class AnalysisApiIntegrationTest {
         void testDetectHammerPatterns() throws Exception {
             ScanRequest request = new ScanRequest();
             request.setPatterns(Set.of("HAMMER"));
-            request.setStartTimestamp(1753038000L);
-            request.setEndTimestamp(1753297200L);
+            request.setStartTimestamp(humanReadableToTimestamp("2025-07-19 09:00:00"));
+            request.setEndTimestamp(humanReadableToTimestamp("2025-07-25 09:00:00"));
 
             mockMvc.perform(post("/api/analysis/scan")
                             .header("X-API-Key", "test-api-key")
