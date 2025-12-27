@@ -1,5 +1,8 @@
 package com.joakimcolloz.stocker.analysis.controller;
 
+import com.joakimcolloz.stocker.analysis.dto.AverageVolumeStatistic;
+import com.joakimcolloz.stocker.analysis.dto.HighVolumeCandlestick;
+import com.joakimcolloz.stocker.analysis.dto.HighVolumeRequest;
 import com.joakimcolloz.stocker.analysis.dto.PatternInfo;
 import com.joakimcolloz.stocker.analysis.dto.PatternMatch;
 import com.joakimcolloz.stocker.analysis.dto.ScanRequest;
@@ -14,6 +17,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
@@ -92,5 +96,58 @@ public class AnalysisController {
         );
 
         return ResponseEntity.ok(patterns);
+    }
+
+    /**
+     * Calculates average trading volume for all stock symbols within the specified time range.
+     *
+     * @return list of average volume statistics
+     */
+    @GetMapping("/statistics/average-volume")
+    @Operation(summary = "Get average volumes",
+            description = "Returns average trading volume statistics for each stock symbol within the specified time range")
+    public ResponseEntity<List<AverageVolumeStatistic>> getAverageVolumes(
+            @RequestParam long startTimestamp,
+            @RequestParam long endTimestamp) {
+
+        // Validate time range
+        if (startTimestamp <= 0 || endTimestamp <= 0 || startTimestamp > endTimestamp) {
+            return ResponseEntity.badRequest().build();
+        }
+
+        List<AverageVolumeStatistic> statistics = analysisService.calculateAverageVolumes(
+                startTimestamp, endTimestamp
+        );
+
+        return ResponseEntity.ok(statistics);
+    }
+
+    /**
+     * Identifies candlesticks with volume significantly above average.
+     *
+     * @param request request containing time range and percentage threshold
+     * @return list of high volume candlesticks
+     */
+    @PostMapping("/high-volume")
+    @Operation(summary = "Find high volume candlesticks",
+            description = "Identifies candlesticks where volume exceeds the average by a specified percentage within the time range")
+    public ResponseEntity<List<HighVolumeCandlestick>> findHighVolume(@RequestBody HighVolumeRequest request) {
+        // Validate request
+        if (request.getStartTimestamp() <= 0 || request.getEndTimestamp() <= 0) {
+            return ResponseEntity.badRequest().build();
+        }
+
+        if (request.getStartTimestamp() > request.getEndTimestamp()) {
+            return ResponseEntity.badRequest().build();
+        }
+
+        if (request.getPercentageAbove() < 0) {
+            return ResponseEntity.badRequest().build();
+        }
+
+        // Find high volume candlesticks
+        List<HighVolumeCandlestick> results = analysisService.findHighVolumeCandlesticks(request);
+
+        return ResponseEntity.ok(results);
     }
 }

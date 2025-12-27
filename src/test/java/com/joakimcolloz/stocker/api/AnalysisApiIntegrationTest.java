@@ -1,6 +1,8 @@
 package com.joakimcolloz.stocker.api;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.joakimcolloz.stocker.analysis.dto.HighVolumeCandlestick;
+import com.joakimcolloz.stocker.analysis.dto.HighVolumeRequest;
 import com.joakimcolloz.stocker.analysis.dto.ScanRequest;
 import com.joakimcolloz.stocker.analysis.dto.ScanResponse;
 import com.joakimcolloz.stocker.api.dao.CandlestickRepository;
@@ -33,6 +35,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.util.List;
 import java.util.Set;
 
 // Hamcrest matchers - third-party assertion library for readable, expressive test conditions
@@ -62,6 +65,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  *   <li>Pattern scanning endpoint</li>
  *   <li>Supported patterns endpoint</li>
  *   <li>Hammer pattern detection logic</li>
+ *   <li>Average volume calculation logic</li>
  * </ul>
  *
  * @author Joakim Colloz
@@ -455,5 +459,244 @@ public class AnalysisApiIntegrationTest {
                     .andExpect(status().isOk()) // No error, just no results
                     .andExpect(jsonPath("$.totalMatches").value(0));
         }
+    }
+
+    @Nested
+    @DisplayName("Average Volume Statistics Tests")
+    class AverageVolumeStatisticsTests {
+
+        @BeforeEach
+        void setUpVolumeTestData() {
+            candlestickRepository.deleteAll();
+
+            // BOL.ST - volumes: 1000, 2000, 3000 (avg = 2000)
+            candlestickRepository.save(new Candlestick(
+                    100, 102, 99, 103, 1000,
+                    humanReadableToTimestamp("2025-12-01 09:00:00"), "BOL.ST"));
+
+            candlestickRepository.save(new Candlestick(
+                    100, 102, 99, 103, 2000,
+                    humanReadableToTimestamp("2025-12-02 09:00:00"), "BOL.ST"));
+
+            candlestickRepository.save(new Candlestick(
+                    100, 102, 99, 103, 3000,
+                    humanReadableToTimestamp("2025-12-03 09:00:00"), "BOL.ST"));
+
+            // ABB.ST - volumes: 5000, 7000 (avg = 6000)
+            candlestickRepository.save(new Candlestick(
+                    100, 102, 99, 103, 5000,
+                    humanReadableToTimestamp("2025-12-04 09:00:00"), "ABB.ST"));
+
+            candlestickRepository.save(new Candlestick(
+                    100, 102, 99, 103, 7000,
+                    humanReadableToTimestamp("2025-12-05 09:00:00"), "ABB.ST"));
+        }
+
+        @Test
+        @DisplayName("Should calculate average volume for each symbol")
+        void testCalculateAverageVolumes() throws Exception {
+            long start = humanReadableToTimestamp("2025-12-01 00:00:00");
+            long end = humanReadableToTimestamp("2025-12-05 23:59:59");
+
+            mockMvc.perform(get("/api/analysis/statistics/average-volume")
+                            .param("startTimestamp", String.valueOf(start))
+                            .param("endTimestamp", String.valueOf(end))
+                            .header("X-API-Key", "test-api-key"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$", hasSize(2)))
+                    .andExpect(jsonPath("$[0].symbol").value("ABB.ST"))
+                    .andExpect(jsonPath("$[0].averageVolume").value(6000))
+                    .andExpect(jsonPath("$[0].dataPoints").value(2))
+                    .andExpect(jsonPath("$[1].symbol").value("BOL.ST"))
+                    .andExpect(jsonPath("$[1].averageVolume").value(2000))
+                    .andExpect(jsonPath("$[1].dataPoints").value(3));
+        }
+
+        @Test
+        @DisplayName("Should return empty list when no data in range")
+        void testAverageVolumesEmptyDatabase() throws Exception {
+            long start = humanReadableToTimestamp("2025-12-01 00:00:00");
+            long end = humanReadableToTimestamp("2025-12-05 23:59:59");
+
+            candlestickRepository.deleteAll();
+
+            mockMvc.perform(get("/api/analysis/statistics/average-volume")
+                            .param("startTimestamp", String.valueOf(start))
+                            .param("endTimestamp", String.valueOf(end))
+                            .header("X-API-Key", "test-api-key"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$", hasSize(0)));
+        }
+
+        @Test
+        @DisplayName("Should return 400 when timestamps are invalid")
+        void testAverageVolumesInvalidTimestamps() throws Exception {
+            mockMvc.perform(get("/api/analysis/statistics/average-volume")
+                            .param("startTimestamp", "0")
+                            .param("endTimestamp", "1000")
+                            .header("X-API-Key", "test-api-key"))
+                    .andExpect(status().isBadRequest());
+        }
+    }
+
+    /**
+     * Tests for high volume candlestick detection functionality.
+     */
+    @Nested
+    @DisplayName("High Volume Detection Tests")
+    class HighVolumeDetectionTests {
+
+        @BeforeEach
+        void setUpHighVolumeTestData() {
+            candlestickRepository.deleteAll();
+
+            // BOL.ST - volumes: 1000, 2000, 3000, 6000 (avg = 3000)
+            candlestickRepository.save(new Candlestick(
+                    100, 102, 99, 103, 1000,
+                    humanReadableToTimestamp("2025-12-01 09:00:00"), "BOL.ST"));
+
+            candlestickRepository.save(new Candlestick(
+                    100, 102, 99, 103, 2000,
+                    humanReadableToTimestamp("2025-12-02 09:00:00"), "BOL.ST"));
+
+            candlestickRepository.save(new Candlestick(
+                    100, 102, 99, 103, 3000,
+                    humanReadableToTimestamp("2025-12-03 09:00:00"), "BOL.ST"));
+
+            // High volume - 100% above average (6000 vs avg 3000)
+            candlestickRepository.save(new Candlestick(
+                    100, 102, 99, 103, 6000,
+                    humanReadableToTimestamp("2025-12-04 09:00:00"), "BOL.ST"));
+
+            // ABB.ST - volumes: 5000, 10000 (avg = 7500)
+            candlestickRepository.save(new Candlestick(
+                    100, 102, 99, 103, 5000,
+                    humanReadableToTimestamp("2025-12-05 09:00:00"), "ABB.ST"));
+
+            // High volume - 33% above average (10000 vs avg 7500)
+            candlestickRepository.save(new Candlestick(
+                    100, 102, 99, 103, 10000,
+                    humanReadableToTimestamp("2025-12-06 09:00:00"), "ABB.ST"));
+        }
+
+        @Test
+        @DisplayName("Should detect candlesticks with volume 50% above average")
+        void testDetectHighVolume50Percent() throws Exception {
+            HighVolumeRequest request = new HighVolumeRequest();
+            request.setStartTimestamp(humanReadableToTimestamp("2025-12-01 00:00:00"));
+            request.setEndTimestamp(humanReadableToTimestamp("2025-12-06 23:59:59"));
+            request.setPercentageAbove(50);
+
+            mockMvc.perform(post("/api/analysis/high-volume")
+                            .header("X-API-Key", "test-api-key")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(objectMapper.writeValueAsString(request)))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$", hasSize(1)))
+                    .andExpect(jsonPath("$[0].symbol").value("BOL.ST"))
+                    .andExpect(jsonPath("$[0].volume").value(6000))
+                    .andExpect(jsonPath("$[0].averageVolume").value(3000))
+                    .andExpect(jsonPath("$[0].percentageAboveAverage").value(100));
+        }
+
+        @Test
+        @DisplayName("Should detect multiple symbols with high volume")
+        void testDetectHighVolumeMultipleSymbols() throws Exception {
+            HighVolumeRequest request = new HighVolumeRequest();
+            request.setStartTimestamp(humanReadableToTimestamp("2025-12-01 00:00:00"));
+            request.setEndTimestamp(humanReadableToTimestamp("2025-12-06 23:59:59"));
+            request.setPercentageAbove(30);
+
+            mockMvc.perform(post("/api/analysis/high-volume")
+                            .header("X-API-Key", "test-api-key")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(objectMapper.writeValueAsString(request)))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$", hasSize(2)))
+                    .andExpect(jsonPath("$[*].symbol", hasItem("BOL.ST")))
+                    .andExpect(jsonPath("$[*].symbol", hasItem("ABB.ST")));
+        }
+
+        @Test
+        @DisplayName("Should return empty list when no high volume candlesticks")
+        void testNoHighVolumeDetected() throws Exception {
+            HighVolumeRequest request = new HighVolumeRequest();
+            request.setStartTimestamp(humanReadableToTimestamp("2025-12-01 00:00:00"));
+            request.setEndTimestamp(humanReadableToTimestamp("2025-12-06 23:59:59"));
+            request.setPercentageAbove(200); // Very high threshold
+
+            mockMvc.perform(post("/api/analysis/high-volume")
+                            .header("X-API-Key", "test-api-key")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(objectMapper.writeValueAsString(request)))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$", hasSize(0)));
+        }
+
+        @Test
+        @DisplayName("Should return 400 when timestamps are invalid")
+        void testHighVolumeInvalidTimestamps() throws Exception {
+            HighVolumeRequest request = new HighVolumeRequest();
+            request.setStartTimestamp(0);
+            request.setEndTimestamp(1000);
+            request.setPercentageAbove(50);
+
+            mockMvc.perform(post("/api/analysis/high-volume")
+                            .header("X-API-Key", "test-api-key")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(objectMapper.writeValueAsString(request)))
+                    .andExpect(status().isBadRequest());
+        }
+
+        @Test
+        @DisplayName("Should return 400 when percentage is negative")
+        void testHighVolumeNegativePercentage() throws Exception {
+            HighVolumeRequest request = new HighVolumeRequest();
+            request.setStartTimestamp(humanReadableToTimestamp("2025-12-01 00:00:00"));
+            request.setEndTimestamp(humanReadableToTimestamp("2025-12-06 23:59:59"));
+            request.setPercentageAbove(-10);
+
+            mockMvc.perform(post("/api/analysis/high-volume")
+                            .header("X-API-Key", "test-api-key")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(objectMapper.writeValueAsString(request)))
+                    .andExpect(status().isBadRequest());
+        }
+
+        @Test
+        @DisplayName("Should not include candlesticks below threshold")
+        void testExcludesBelowThreshold() throws Exception {
+            HighVolumeRequest request = new HighVolumeRequest();
+            request.setStartTimestamp(humanReadableToTimestamp("2025-12-01 00:00:00"));
+            request.setEndTimestamp(humanReadableToTimestamp("2025-12-06 23:59:59"));
+            request.setPercentageAbove(50);
+
+            String response = mockMvc.perform(post("/api/analysis/high-volume")
+                            .header("X-API-Key", "test-api-key")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(objectMapper.writeValueAsString(request)))
+                    .andExpect(status().isOk())
+                    .andReturn()
+                    .getResponse()
+                    .getContentAsString();
+
+            var results = objectMapper.readValue(response,
+                    new com.fasterxml.jackson.core.type.TypeReference<List<HighVolumeCandlestick>>() {});
+
+            // Verify these specific candlesticks are NOT included (below 50% threshold)
+            assertTrue(results.stream().noneMatch(c ->
+                            c.getVolume() == 2000 && c.getSymbol().equals("BOL.ST")),
+                    "Should not include BOL.ST with volume 2000");
+
+            assertTrue(results.stream().noneMatch(c ->
+                            c.getVolume() == 3000 && c.getSymbol().equals("BOL.ST")),
+                    "Should not include BOL.ST with volume 3000");
+        }
+    }
+
+    private long humanReadableToTimestamp(String humanReadableTime) {
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+        LocalDateTime dateTime = LocalDateTime.parse(humanReadableTime, formatter);
+        return dateTime.atZone(ZoneId.systemDefault()).toEpochSecond();
     }
 }

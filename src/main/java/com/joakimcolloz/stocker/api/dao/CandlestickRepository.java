@@ -51,4 +51,27 @@ public interface CandlestickRepository extends JpaRepository<Candlestick, Intege
      */
     @Query("SELECT DISTINCT c.symbol FROM Candlestick c ORDER BY c.symbol")
     List<String> findAllDistinctSymbols();
+
+    /**
+     * Calculates average volume statistics grouped by symbol within a specified time range.
+     * <p>
+     * Returns array with: [symbol, avgVolume, count] for each symbol that has
+     * candlestick data in the given timestamp range.
+     *
+     * @param start the start of the time range (inclusive, Unix epoch seconds)
+     * @param end   the end of the time range (inclusive, Unix epoch seconds)
+     * @return list of object arrays, each containing:
+     *         <ul>
+     *           <li>[0] String - stock symbol</li>
+     *           <li>[1] Double - average volume</li>
+     *           <li>[2] Long - number of data points</li>
+     *         </ul>
+     */
+    @Query("SELECT c.symbol, AVG(c.volume), COUNT(c) FROM Candlestick c " +
+            "WHERE c.timestamp BETWEEN :start AND :end " +
+            "GROUP BY c.symbol ORDER BY c.symbol")
+    List<Object[]> findAverageVolumeBySymbolAndTimeRange(
+            @Param("start") long start,
+            @Param("end") long end
+    );
 }
