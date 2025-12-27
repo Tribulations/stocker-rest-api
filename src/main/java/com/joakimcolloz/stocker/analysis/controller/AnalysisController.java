@@ -1,6 +1,8 @@
 package com.joakimcolloz.stocker.analysis.controller;
 
 import com.joakimcolloz.stocker.analysis.dto.AverageVolumeStatistic;
+import com.joakimcolloz.stocker.analysis.dto.HighVolumeCandlestick;
+import com.joakimcolloz.stocker.analysis.dto.HighVolumeRequest;
 import com.joakimcolloz.stocker.analysis.dto.PatternInfo;
 import com.joakimcolloz.stocker.analysis.dto.PatternMatch;
 import com.joakimcolloz.stocker.analysis.dto.ScanRequest;
@@ -118,5 +120,34 @@ public class AnalysisController {
         );
 
         return ResponseEntity.ok(statistics);
+    }
+
+    /**
+     * Identifies candlesticks with volume significantly above average.
+     *
+     * @param request request containing time range and percentage threshold
+     * @return list of high volume candlesticks
+     */
+    @PostMapping("/high-volume")
+    @Operation(summary = "Find high volume candlesticks",
+            description = "Identifies candlesticks where volume exceeds the average by a specified percentage within the time range")
+    public ResponseEntity<List<HighVolumeCandlestick>> findHighVolume(@RequestBody HighVolumeRequest request) {
+        // Validate request
+        if (request.getStartTimestamp() <= 0 || request.getEndTimestamp() <= 0) {
+            return ResponseEntity.badRequest().build();
+        }
+
+        if (request.getStartTimestamp() > request.getEndTimestamp()) {
+            return ResponseEntity.badRequest().build();
+        }
+
+        if (request.getPercentageAbove() < 0) {
+            return ResponseEntity.badRequest().build();
+        }
+
+        // Find high volume candlesticks
+        List<HighVolumeCandlestick> results = analysisService.findHighVolumeCandlesticks(request);
+
+        return ResponseEntity.ok(results);
     }
 }
