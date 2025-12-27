@@ -62,6 +62,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  *   <li>Pattern scanning endpoint</li>
  *   <li>Supported patterns endpoint</li>
  *   <li>Hammer pattern detection logic</li>
+ *   <li>Average volume calculation logic</li>
  * </ul>
  *
  * @author Joakim Colloz
@@ -455,5 +456,89 @@ public class AnalysisApiIntegrationTest {
                     .andExpect(status().isOk()) // No error, just no results
                     .andExpect(jsonPath("$.totalMatches").value(0));
         }
+    }
+
+    @Nested
+    @DisplayName("Average Volume Statistics Tests")
+    class AverageVolumeStatisticsTests {
+
+        @BeforeEach
+        void setUpVolumeTestData() {
+            candlestickRepository.deleteAll();
+
+            // BOL.ST - volumes: 1000, 2000, 3000 (avg = 2000)
+            candlestickRepository.save(new Candlestick(
+                    100, 102, 99, 103, 1000,
+                    humanReadableToTimestamp("2025-12-01 09:00:00"), "BOL.ST"));
+
+            candlestickRepository.save(new Candlestick(
+                    100, 102, 99, 103, 2000,
+                    humanReadableToTimestamp("2025-12-02 09:00:00"), "BOL.ST"));
+
+            candlestickRepository.save(new Candlestick(
+                    100, 102, 99, 103, 3000,
+                    humanReadableToTimestamp("2025-12-03 09:00:00"), "BOL.ST"));
+
+            // ABB.ST - volumes: 5000, 7000 (avg = 6000)
+            candlestickRepository.save(new Candlestick(
+                    100, 102, 99, 103, 5000,
+                    humanReadableToTimestamp("2025-12-04 09:00:00"), "ABB.ST"));
+
+            candlestickRepository.save(new Candlestick(
+                    100, 102, 99, 103, 7000,
+                    humanReadableToTimestamp("2025-12-05 09:00:00"), "ABB.ST"));
+        }
+
+        @Test
+        @DisplayName("Should calculate average volume for each symbol")
+        void testCalculateAverageVolumes() throws Exception {
+            long start = humanReadableToTimestamp("2025-12-01 00:00:00");
+            long end = humanReadableToTimestamp("2025-12-05 23:59:59");
+
+            mockMvc.perform(get("/api/analysis/statistics/average-volume")
+                            .param("startTimestamp", String.valueOf(start))
+                            .param("endTimestamp", String.valueOf(end))
+                            .header("X-API-Key", "test-api-key"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$", hasSize(2)))
+                    .andExpect(jsonPath("$[0].symbol").value("ABB.ST"))
+                    .andExpect(jsonPath("$[0].averageVolume").value(6000))
+                    .andExpect(jsonPath("$[0].dataPoints").value(2))
+                    .andExpect(jsonPath("$[1].symbol").value("BOL.ST"))
+                    .andExpect(jsonPath("$[1].averageVolume").value(2000))
+                    .andExpect(jsonPath("$[1].dataPoints").value(3));
+        }
+
+        @Test
+        @DisplayName("Should return empty list when no data in range")
+        void testAverageVolumesEmptyDatabase() throws Exception {
+            long start = humanReadableToTimestamp("2025-12-01 00:00:00");
+            long end = humanReadableToTimestamp("2025-12-05 23:59:59");
+
+            candlestickRepository.deleteAll();
+
+            mockMvc.perform(get("/api/analysis/statistics/average-volume")
+                            .param("startTimestamp", String.valueOf(start))
+                            .param("endTimestamp", String.valueOf(end))
+                            .header("X-API-Key", "test-api-key"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$", hasSize(0)));
+        }
+
+        @Test
+        @DisplayName("Should return 400 when timestamps are invalid")
+        void testAverageVolumesInvalidTimestamps() throws Exception {
+            mockMvc.perform(get("/api/analysis/statistics/average-volume")
+                            .param("startTimestamp", "0")
+                            .param("endTimestamp", "1000")
+                            .header("X-API-Key", "test-api-key"))
+                    .andExpect(status().isBadRequest());
+        }
+    }
+
+    private long humanReadableToTimestamp(String humanReadableTime) {
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+        LocalDateTime dateTime = LocalDateTime.parse(humanReadableTime, formatter);
+        return dateTime.atZone(ZoneId.systemDefault()).toEpochSecond();
     }
 }

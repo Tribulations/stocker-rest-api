@@ -1,5 +1,6 @@
 package com.joakimcolloz.stocker.analysis.service;
 
+import com.joakimcolloz.stocker.analysis.dto.AverageVolumeStatistic;
 import com.joakimcolloz.stocker.analysis.dto.PatternMatch;
 import com.joakimcolloz.stocker.analysis.dto.ScanRequest;
 import com.joakimcolloz.stocker.api.dao.CandlestickRepository;
@@ -58,5 +59,29 @@ public class AnalysisService {
         allMatches.sort((a, b) -> Long.compare(b.getTimestamp(), a.getTimestamp()));
 
         return allMatches;
+    }
+
+    /**
+     * Calculates average trading volume for each stock symbol.
+     *
+     * @return list of average volume statistics per symbol
+     */
+    public List<AverageVolumeStatistic> calculateAverageVolumes(long startTimestamp, long endTimestamp) {
+        List<Object[]> results = candlestickRepository.findAverageVolumeBySymbolAndTimeRange(
+                startTimestamp, endTimestamp
+        );
+
+        List<AverageVolumeStatistic> statistics = new ArrayList<>();
+
+        for (Object[] result : results) {
+            String symbol = (String) result[0];
+            // AVG() in JPQL returns Double, convert to long
+            long averageVolume = ((Number) result[1]).longValue();
+            int dataPoints = ((Number) result[2]).intValue();
+
+            statistics.add(new AverageVolumeStatistic(symbol, averageVolume, dataPoints));
+        }
+
+        return statistics;
     }
 }
