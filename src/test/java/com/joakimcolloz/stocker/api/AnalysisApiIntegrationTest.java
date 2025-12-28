@@ -540,8 +540,8 @@ public class AnalysisApiIntegrationTest {
                             .content(objectMapper.writeValueAsString(request)))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$", hasSize(2)))
-                    .andExpect(jsonPath("$[*].symbol", hasItem("BOL.ST")))
-                    .andExpect(jsonPath("$[*].symbol", hasItem("ABB.ST")));
+                    .andExpect(jsonPath("$[0].symbol").value("ABB.ST"))
+                    .andExpect(jsonPath("$[1].symbol").value("BOL.ST"));
         }
 
         @Test
