@@ -6,7 +6,6 @@ import com.joakimcolloz.stocker.analysis.dto.HighVolumeRequest;
 import com.joakimcolloz.stocker.analysis.dto.ScanRequest;
 import com.joakimcolloz.stocker.analysis.dto.ScanResponse;
 import com.joakimcolloz.stocker.api.dao.CandlestickRepository;
-import com.joakimcolloz.stocker.api.entity.Candlestick;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -32,15 +31,13 @@ import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
-import java.time.LocalDateTime;
-import java.time.ZoneId;
-import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Set;
 
 // Hamcrest matchers - third-party assertion library for readable, expressive test conditions
 // Used with MockMvc's jsonPath() to validate JSON responses in a fluent way
 // 'static import' allows calling matchers directly: hasSize(2) instead of Matchers.hasSize(2)
+import static com.joakimcolloz.stocker.api.AnalysisApiIntegrationTestUtil.humanReadableToTimestamp;
 import static org.hamcrest.Matchers.everyItem;
 import static org.hamcrest.Matchers.greaterThan;
 import static org.hamcrest.Matchers.greaterThanOrEqualTo;
@@ -66,6 +63,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  *   <li>Supported patterns endpoint</li>
  *   <li>Hammer pattern detection logic</li>
  *   <li>Average volume calculation logic</li>
+ *   <li>High volume detection</li>
  * </ul>
  *
  * @author Joakim Colloz
@@ -141,39 +139,6 @@ public class AnalysisApiIntegrationTest {
     // ObjectMapper for JSON serialization/deserialization in tests
     @Autowired
     private ObjectMapper objectMapper;
-
-    /**
-     * Sets up test data with various candlestick patterns.
-     */
-    // @BeforeEach: Runs before each test method to ensure clean, isolated test data
-    @BeforeEach
-    void setUp() {
-        // Start fresh: delete all data to prevent test pollution
-        candlestickRepository.deleteAll();
-
-        // Regular candle (not a hammer)
-        candlestickRepository.save(new Candlestick(
-                100, 103, 99, 102, 5000,
-                humanReadableToTimestamp("2025-07-20 09:00:00"), "BOL.ST"));
-
-        // Hammer pattern: long lower shadow, small body, tiny upper shadow
-        // Body = |Close - Open| = |100 - 98| = 2
-        // Lower shadow = min(Open, Close) - Low = 98 - 90 = 8
-        // Upper shadow = High - max(Open, Close) = 100.5 - 100 = 0.5
-        candlestickRepository.save(new Candlestick(
-                98, 100.5, 90, 100, 6000,
-                humanReadableToTimestamp("2025-07-21 09:00:00"), "BOL.ST"));
-
-        // Another hammer for different symbol
-        candlestickRepository.save(new Candlestick(
-                95, 97.5, 85, 97, 7000,
-                humanReadableToTimestamp("2025-07-20 09:00:00"), "ABB.ST"));
-
-        // Not a hammer (balanced shadows)
-        candlestickRepository.save(new Candlestick(
-                100, 110, 95, 105, 8000,
-                humanReadableToTimestamp("2025-07-22 09:00:00"), "BOL.ST"));
-    }
 
     /**
      * Tests for API key authentication on analysis endpoints.
@@ -268,8 +233,8 @@ public class AnalysisApiIntegrationTest {
         void testScanWithEmptyPatterns() throws Exception {
             ScanRequest request = new ScanRequest();
             request.setPatterns(Set.of()); // Invalid: empty patterns
-            request.setStartTimestamp(1753038000L);
-            request.setEndTimestamp(1753297200L);
+            request.setStartTimestamp(humanReadableToTimestamp("2025-07-20 09:00:00"));
+            request.setEndTimestamp(humanReadableToTimestamp("2025-07-23 09:00:00"));
 
             mockMvc.perform(post("/api/analysis/scan")
                             .header("X-API-Key", "test-api-key")
@@ -312,11 +277,66 @@ public class AnalysisApiIntegrationTest {
     }
 
     /**
+     * Tests for edge cases and boundary conditions.
+     */
+    @Nested
+    @DisplayName("Edge Case Tests")
+    class EdgeCaseTests {
+
+        // Intent: Verify system handles empty data set without errors
+        @Test
+        @DisplayName("Should handle empty database gracefully")
+        void testScanEmptyDatabase() throws Exception {
+            candlestickRepository.deleteAll(); // Override @BeforeEach setup
+
+            ScanRequest request = new ScanRequest();
+            request.setPatterns(Set.of("HAMMER"));
+            request.setStartTimestamp(1753038000L);
+            request.setEndTimestamp(1753297200L);
+
+            mockMvc.perform(post("/api/analysis/scan")
+                            .header("X-API-Key", "test-api-key")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(objectMapper.writeValueAsString(request)))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.totalMatches").value(0))
+                    .andExpect(jsonPath("$.matches", hasSize(0)));
+        }
+
+        // Intent: Ensure unknown patterns don't cause errors (graceful degradation)
+        @Test
+        @DisplayName("Should handle unknown pattern type gracefully")
+        void testScanWithUnknownPattern() throws Exception {
+            ScanRequest request = new ScanRequest();
+            request.setPatterns(Set.of("UNKNOWN_PATTERN"));
+            request.setStartTimestamp(1753038000L);
+            request.setEndTimestamp(1753297200L);
+
+            mockMvc.perform(post("/api/analysis/scan")
+                            .header("X-API-Key", "test-api-key")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(objectMapper.writeValueAsString(request)))
+                    .andExpect(status().isOk()) // No error, just no results
+                    .andExpect(jsonPath("$.totalMatches").value(0));
+        }
+    }
+
+    /**
      * Tests for hammer pattern detection functionality.
      */
     @Nested
     @DisplayName("Hammer Pattern Detection Tests")
     class HammerDetectionTests {
+        /**
+         * Sets up test data with various candlestick patterns.
+         */
+        // @BeforeEach: Runs before each test method to ensure clean, isolated test data
+        @BeforeEach
+        void setUpHammerTestData() {
+            // Start fresh: delete all data to prevent test pollution
+            candlestickRepository.deleteAll();
+            AnalysisApiIntegrationTestUtil.insertHammerTestDataToDb(candlestickRepository);
+        }
 
         // Intent: Verify core business logic detects hammer patterns from test data
         @Test
@@ -416,51 +436,6 @@ public class AnalysisApiIntegrationTest {
         }
     }
 
-    /**
-     * Tests for edge cases and boundary conditions.
-     */
-    @Nested
-    @DisplayName("Edge Case Tests")
-    class EdgeCaseTests {
-
-        // Intent: Verify system handles empty data set without errors
-        @Test
-        @DisplayName("Should handle empty database gracefully")
-        void testScanEmptyDatabase() throws Exception {
-            candlestickRepository.deleteAll(); // Override @BeforeEach setup
-
-            ScanRequest request = new ScanRequest();
-            request.setPatterns(Set.of("HAMMER"));
-            request.setStartTimestamp(1753038000L);
-            request.setEndTimestamp(1753297200L);
-
-            mockMvc.perform(post("/api/analysis/scan")
-                            .header("X-API-Key", "test-api-key")
-                            .contentType(MediaType.APPLICATION_JSON)
-                            .content(objectMapper.writeValueAsString(request)))
-                    .andExpect(status().isOk())
-                    .andExpect(jsonPath("$.totalMatches").value(0))
-                    .andExpect(jsonPath("$.matches", hasSize(0)));
-        }
-
-        // Intent: Ensure unknown patterns don't cause errors (graceful degradation)
-        @Test
-        @DisplayName("Should handle unknown pattern type gracefully")
-        void testScanWithUnknownPattern() throws Exception {
-            ScanRequest request = new ScanRequest();
-            request.setPatterns(Set.of("UNKNOWN_PATTERN"));
-            request.setStartTimestamp(1753038000L);
-            request.setEndTimestamp(1753297200L);
-
-            mockMvc.perform(post("/api/analysis/scan")
-                            .header("X-API-Key", "test-api-key")
-                            .contentType(MediaType.APPLICATION_JSON)
-                            .content(objectMapper.writeValueAsString(request)))
-                    .andExpect(status().isOk()) // No error, just no results
-                    .andExpect(jsonPath("$.totalMatches").value(0));
-        }
-    }
-
     @Nested
     @DisplayName("Average Volume Statistics Tests")
     class AverageVolumeStatisticsTests {
@@ -468,28 +443,7 @@ public class AnalysisApiIntegrationTest {
         @BeforeEach
         void setUpVolumeTestData() {
             candlestickRepository.deleteAll();
-
-            // BOL.ST - volumes: 1000, 2000, 3000 (avg = 2000)
-            candlestickRepository.save(new Candlestick(
-                    100, 103, 99, 102, 1000,
-                    humanReadableToTimestamp("2025-12-01 09:00:00"), "BOL.ST"));
-
-            candlestickRepository.save(new Candlestick(
-                    100, 103, 99, 102, 2000,
-                    humanReadableToTimestamp("2025-12-02 09:00:00"), "BOL.ST"));
-
-            candlestickRepository.save(new Candlestick(
-                    100, 103, 99, 102, 3000,
-                    humanReadableToTimestamp("2025-12-03 09:00:00"), "BOL.ST"));
-
-            // ABB.ST - volumes: 5000, 7000 (avg = 6000)
-            candlestickRepository.save(new Candlestick(
-                    100, 103, 99, 102, 5000,
-                    humanReadableToTimestamp("2025-12-04 09:00:00"), "ABB.ST"));
-
-            candlestickRepository.save(new Candlestick(
-                    100, 103, 99, 102, 7000,
-                    humanReadableToTimestamp("2025-12-05 09:00:00"), "ABB.ST"));
+            AnalysisApiIntegrationTestUtil.insertAverageVolumeTestDataToDb(candlestickRepository);
         }
 
         @Test
@@ -549,34 +503,7 @@ public class AnalysisApiIntegrationTest {
         @BeforeEach
         void setUpHighVolumeTestData() {
             candlestickRepository.deleteAll();
-
-            // BOL.ST - volumes: 1000, 2000, 3000, 6000 (avg = 3000)
-            candlestickRepository.save(new Candlestick(
-                    100, 103, 99, 102, 1000,
-                    humanReadableToTimestamp("2025-12-01 09:00:00"), "BOL.ST"));
-
-            candlestickRepository.save(new Candlestick(
-                    100, 103, 99, 102, 2000,
-                    humanReadableToTimestamp("2025-12-02 09:00:00"), "BOL.ST"));
-
-            candlestickRepository.save(new Candlestick(
-                    100, 103, 99, 102, 3000,
-                    humanReadableToTimestamp("2025-12-03 09:00:00"), "BOL.ST"));
-
-            // High volume - 100% above average (6000 vs avg 3000)
-            candlestickRepository.save(new Candlestick(
-                    100, 103, 99, 102, 6000,
-                    humanReadableToTimestamp("2025-12-04 09:00:00"), "BOL.ST"));
-
-            // ABB.ST - volumes: 5000, 10000 (avg = 7500)
-            candlestickRepository.save(new Candlestick(
-                    100, 103, 99, 102, 5000,
-                    humanReadableToTimestamp("2025-12-05 09:00:00"), "ABB.ST"));
-
-            // High volume - 33% above average (10000 vs avg 7500)
-            candlestickRepository.save(new Candlestick(
-                    100, 103, 99, 102, 10000,
-                    humanReadableToTimestamp("2025-12-06 09:00:00"), "ABB.ST"));
+            AnalysisApiIntegrationTestUtil.insertHighVolumeTestDataToDb(candlestickRepository);
         }
 
         @Test
@@ -692,11 +619,5 @@ public class AnalysisApiIntegrationTest {
                             c.getVolume() == 3000 && c.getSymbol().equals("BOL.ST")),
                     "Should not include BOL.ST with volume 3000");
         }
-    }
-
-    private long humanReadableToTimestamp(String humanReadableTime) {
-        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
-        LocalDateTime dateTime = LocalDateTime.parse(humanReadableTime, formatter);
-        return dateTime.atZone(ZoneId.systemDefault()).toEpochSecond();
     }
 }
