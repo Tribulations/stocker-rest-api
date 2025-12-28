@@ -279,6 +279,51 @@ public class AnalysisApiIntegrationTest {
     }
 
     /**
+     * Tests for edge cases and boundary conditions.
+     */
+    @Nested
+    @DisplayName("Edge Case Tests")
+    class EdgeCaseTests {
+
+        // Intent: Verify system handles empty data set without errors
+        @Test
+        @DisplayName("Should handle empty database gracefully")
+        void testScanEmptyDatabase() throws Exception {
+            candlestickRepository.deleteAll(); // Override @BeforeEach setup
+
+            ScanRequest request = new ScanRequest();
+            request.setPatterns(Set.of("HAMMER"));
+            request.setStartTimestamp(1753038000L);
+            request.setEndTimestamp(1753297200L);
+
+            mockMvc.perform(post("/api/analysis/scan")
+                            .header("X-API-Key", "test-api-key")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(objectMapper.writeValueAsString(request)))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.totalMatches").value(0))
+                    .andExpect(jsonPath("$.matches", hasSize(0)));
+        }
+
+        // Intent: Ensure unknown patterns don't cause errors (graceful degradation)
+        @Test
+        @DisplayName("Should handle unknown pattern type gracefully")
+        void testScanWithUnknownPattern() throws Exception {
+            ScanRequest request = new ScanRequest();
+            request.setPatterns(Set.of("UNKNOWN_PATTERN"));
+            request.setStartTimestamp(1753038000L);
+            request.setEndTimestamp(1753297200L);
+
+            mockMvc.perform(post("/api/analysis/scan")
+                            .header("X-API-Key", "test-api-key")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(objectMapper.writeValueAsString(request)))
+                    .andExpect(status().isOk()) // No error, just no results
+                    .andExpect(jsonPath("$.totalMatches").value(0));
+        }
+    }
+
+    /**
      * Tests for hammer pattern detection functionality.
      */
     @Nested
@@ -408,51 +453,6 @@ public class AnalysisApiIntegrationTest {
                                 scanResponse.getMatches().get(i + 1).getTimestamp(),
                         "Results should be sorted by timestamp descending");
             }
-        }
-    }
-
-    /**
-     * Tests for edge cases and boundary conditions.
-     */
-    @Nested
-    @DisplayName("Edge Case Tests")
-    class EdgeCaseTests {
-
-        // Intent: Verify system handles empty data set without errors
-        @Test
-        @DisplayName("Should handle empty database gracefully")
-        void testScanEmptyDatabase() throws Exception {
-            candlestickRepository.deleteAll(); // Override @BeforeEach setup
-
-            ScanRequest request = new ScanRequest();
-            request.setPatterns(Set.of("HAMMER"));
-            request.setStartTimestamp(1753038000L);
-            request.setEndTimestamp(1753297200L);
-
-            mockMvc.perform(post("/api/analysis/scan")
-                            .header("X-API-Key", "test-api-key")
-                            .contentType(MediaType.APPLICATION_JSON)
-                            .content(objectMapper.writeValueAsString(request)))
-                    .andExpect(status().isOk())
-                    .andExpect(jsonPath("$.totalMatches").value(0))
-                    .andExpect(jsonPath("$.matches", hasSize(0)));
-        }
-
-        // Intent: Ensure unknown patterns don't cause errors (graceful degradation)
-        @Test
-        @DisplayName("Should handle unknown pattern type gracefully")
-        void testScanWithUnknownPattern() throws Exception {
-            ScanRequest request = new ScanRequest();
-            request.setPatterns(Set.of("UNKNOWN_PATTERN"));
-            request.setStartTimestamp(1753038000L);
-            request.setEndTimestamp(1753297200L);
-
-            mockMvc.perform(post("/api/analysis/scan")
-                            .header("X-API-Key", "test-api-key")
-                            .contentType(MediaType.APPLICATION_JSON)
-                            .content(objectMapper.writeValueAsString(request)))
-                    .andExpect(status().isOk()) // No error, just no results
-                    .andExpect(jsonPath("$.totalMatches").value(0));
         }
     }
 
