@@ -87,9 +87,9 @@ public class CandlestickApiIntegrationTest {
     @BeforeEach
     void setUp() {
         candlestickRepository.deleteAll();
-        candlestickRepository.save(new Candlestick(100, 102, 113, 97, 5000,
+        candlestickRepository.save(new Candlestick(100, 113, 97, 102, 5000,
                 1753038000L, "BOL.ST"));
-        candlestickRepository.save(new Candlestick(102, 104, 115, 99, 6000,
+        candlestickRepository.save(new Candlestick(102, 115, 99, 104, 6000,
                 1753124400L, "BOL.ST"));
     }
 
