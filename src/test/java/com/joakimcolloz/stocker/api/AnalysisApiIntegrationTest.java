@@ -1,6 +1,7 @@
 package com.joakimcolloz.stocker.api;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+
 import com.joakimcolloz.stocker.analysis.dto.HighVolumeCandlestick;
 import com.joakimcolloz.stocker.analysis.dto.HighVolumeRequest;
 import com.joakimcolloz.stocker.analysis.dto.ScanRequest;
@@ -12,17 +13,12 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Nested;
 
-// Spring dependency injection for test beans
 import org.springframework.beans.factory.annotation.Autowired;
-// Autoconfigures MockMvc bean for MVC layer testing
+
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
-// Loads full Spring application context for integration tests
 import org.springframework.boot.test.context.SpringBootTest;
-// HTTP content type constants (APPLICATION_JSON, etc.)
 import org.springframework.http.MediaType;
-// Activates specific Spring profiles for testing
 import org.springframework.test.context.ActiveProfiles;
-// Registry for adding properties at runtime (used with Testcontainers)
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
@@ -34,9 +30,6 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import java.util.List;
 import java.util.Set;
 
-// Hamcrest matchers - third-party assertion library for readable, expressive test conditions
-// Used with MockMvc's jsonPath() to validate JSON responses in a fluent way
-// 'static import' allows calling matchers directly: hasSize(2) instead of Matchers.hasSize(2)
 import static com.joakimcolloz.stocker.api.AnalysisApiIntegrationTestUtil.humanReadableToTimestamp;
 import static org.hamcrest.Matchers.everyItem;
 import static org.hamcrest.Matchers.greaterThan;
@@ -69,40 +62,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * @author Joakim Colloz
  * @version 1.0
  */
-// @SpringBootTest: Loads the FULL Spring application context (all beans, configurations, auto-configurations)
-// - Creates a real Spring environment, not just isolated components
-// - Use for integration tests that need multiple layers working together (controllers, services, repositories)
-// - Slower than @WebMvcTest or @DataJpaTest but tests realistic application behavior
 @SpringBootTest
-
-// @AutoConfigureMockMvc: Provides MockMvc bean for testing MVC layer WITHOUT starting an actual HTTP server
-// - MockMvc simulates HTTP requests in-memory (faster than real server, no network ports)
-// - Alternative to @SpringBootTest(webEnvironment = RANDOM_PORT) which starts a real embedded server
-// - Gives you full Spring MVC stack (filters, interceptors, exception handlers) but no network overhead
 @AutoConfigureMockMvc
-
-// @Testcontainers: Activates JUnit 5 extension that manages Docker container lifecycle
-// - Automatically starts containers BEFORE tests run and stops them AFTER tests complete
-// - Works with @Container fields to spin up databases, message queues, etc.
-// - Ensures tests run against real dependencies (PostgreSQL here) instead of in-memory H2 or mocks
 @Testcontainers
-
-// @ActiveProfiles("test"): Tells Spring to load configuration from application-test.yml/properties
-// - Overrides default application.yml settings with test-specific values
-// - Commonly used for: test database URLs, disabled security, mock external services
-// - Properties precedence: application-test.yml > application.yml > @DynamicPropertySource
 @ActiveProfiles("test")
-
-// @ExtendWith(SpringExtension.class): Tells JUnit to use Spring's test extension
-// - Integrates Spring's testing features with JUnit 5
-// - Enables @Autowired, @MockBean, @TestPropertySource, etc.
-// - Required for @SpringBootTest and @WebMvcTest
-//@ExtendWith(SpringExtension.class)
 @DisplayName("Analysis API Integration Tests")
 public class AnalysisApiIntegrationTest {
-
-    // @Container: Testcontainers manages this PostgreSQL instance lifecycle
-    // Shared across all tests in this class (static field)
     @Container
     public static PostgreSQLContainer<?> postgreSQLContainer = new PostgreSQLContainer<>("postgres:13-alpine")
             .withDatabaseName("testdb")
@@ -110,11 +75,6 @@ public class AnalysisApiIntegrationTest {
             .withPassword("test")
             .withInitScript("testdb.sql");
 
-    // @DynamicPropertySource: Injects Testcontainers DB connection into Spring context at runtime
-    // - Runs BEFORE Spring context loads, overriding properties from application.properties/application.yml
-    // - application.yml and application.properties are Spring Boot config files (YAML vs properties format)
-    // - Needed because Testcontainers assigns random ports - we don't know DB URL until container starts
-    // - Highest precedence: @DynamicPropertySource > application-test.properties > application.properties
     @DynamicPropertySource
     static void configureProperties(DynamicPropertyRegistry registry) {
         registry.add("spring.datasource.url", postgreSQLContainer::getJdbcUrl);
@@ -122,34 +82,16 @@ public class AnalysisApiIntegrationTest {
         registry.add("spring.datasource.password", postgreSQLContainer::getPassword);
     }
 
-    // @Autowired: Spring injects MockMvc bean to simulate HTTP requests without network calls
-    // MockMvc is Spring's test utility that:
-    // - Calls controllers through Spring's DispatcherServlet (same entry point as real HTTP)
-    // - Processes requests through the FULL MVC pipeline IN-MEMORY (no socket, no TCP/IP, no server startup)
-    // - Tests complete stack: routing, filters, interceptors, validation, serialization, exception handlers
-    // - Example: mockMvc.perform(post("/api/scan")) → Spring routes to @PostMapping → returns testable result
-    // Value: Catches integration issues (JSON mapping, security, validation) faster than real HTTP, more realistic than unit tests
     @Autowired
     private MockMvc mockMvc;
-
-    // Real repository bean from Spring context - not mocked for integration testing
     @Autowired
     private CandlestickRepository candlestickRepository;
-
-    // ObjectMapper for JSON serialization/deserialization in tests
     @Autowired
     private ObjectMapper objectMapper;
 
-    /**
-     * Tests for API key authentication on analysis endpoints.
-     */
-    // @Nested: Groups related tests for better organization and readability
-    // Each nested class can have its own @BeforeEach setup
     @Nested
     @DisplayName("API Key Authentication Tests")
     class ApiKeyAuthenticationTests {
-
-        // Intent: Verify endpoint security by ensuring unauthorized requests are rejected
         @Test
         @DisplayName("Should return 401 when scanning without API key")
         void testScanUnauthorizedWithoutApiKey() throws Exception {
@@ -162,12 +104,6 @@ public class AnalysisApiIntegrationTest {
             mockMvc.perform(post("/api/analysis/scan")
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(objectMapper.writeValueAsString(request)))
-                    // andExpect: Fluent API for asserting response properties
-                    // Fluent API = design pattern (not Spring-specific) where methods return 'this' for chaining
-                    // Fluent API is a pattern, Spring implements it
-                    // Spring's MockMvc uses this pattern: .perform().andExpect().andExpect()
-                    // Other examples: Java's Stream API, StringBuilder, Mockito
-                    // Benefit: Readable, self-documenting test code
                     .andExpect(status().isUnauthorized()); // Expect HTTP 401
         }
 
@@ -178,7 +114,6 @@ public class AnalysisApiIntegrationTest {
                     .andExpect(status().isUnauthorized());
         }
 
-        // Intent: Verify valid API key grants access (positive test case)
         @Test
         @DisplayName("Should return 200 when scanning with valid API key")
         void testScanAuthorizedWithValidApiKey() throws Exception {
@@ -196,22 +131,15 @@ public class AnalysisApiIntegrationTest {
         }
     }
 
-    /**
-     * Tests for the supported patterns endpoint.
-     */
     @Nested
     @DisplayName("Supported Patterns Endpoint Tests")
     class SupportedPatternsTests {
-
-        // Intent: Verify API returns available pattern metadata for client usage
         @Test
         @DisplayName("Should return list of supported patterns")
         void testGetSupportedPatterns() throws Exception {
             mockMvc.perform(get("/api/analysis/patterns/supported")
                             .header("X-API-Key", "test-api-key"))
                     .andExpect(status().isOk())
-                    // jsonPath: Hamcrest matchers for JSON response validation
-                    // $: JSON root, [0]: first array element
                     .andExpect(jsonPath("$", hasSize(greaterThanOrEqualTo(1))))
                     .andExpect(jsonPath("$[0].code").value("HAMMER"))
                     .andExpect(jsonPath("$[0].name").value("Hammer"))
@@ -220,14 +148,9 @@ public class AnalysisApiIntegrationTest {
         }
     }
 
-    /**
-     * Tests for the pattern scanning endpoint validation.
-     */
     @Nested
     @DisplayName("Scan Endpoint Validation Tests")
     class ScanValidationTests {
-
-        // Intent: Ensure business rules are enforced (patterns list cannot be empty)
         @Test
         @DisplayName("Should return 400 when patterns list is empty")
         void testScanWithEmptyPatterns() throws Exception {
@@ -243,7 +166,6 @@ public class AnalysisApiIntegrationTest {
                     .andExpect(status().isBadRequest()); // HTTP 400
         }
 
-        // Intent: Verify timestamp validation prevents invalid queries
         @Test
         @DisplayName("Should return 400 when start timestamp is 0")
         void testScanWithInvalidStartTimestamp() throws Exception {
@@ -259,7 +181,6 @@ public class AnalysisApiIntegrationTest {
                     .andExpect(status().isBadRequest());
         }
 
-        // Intent: Validate time range logic (end must be after start)
         @Test
         @DisplayName("Should return 400 when end timestamp is before start")
         void testScanWithInvalidTimeRange() throws Exception {
@@ -276,14 +197,9 @@ public class AnalysisApiIntegrationTest {
         }
     }
 
-    /**
-     * Tests for edge cases and boundary conditions.
-     */
     @Nested
     @DisplayName("Edge Case Tests")
     class EdgeCaseTests {
-
-        // Intent: Verify system handles empty data set without errors
         @Test
         @DisplayName("Should handle empty database gracefully")
         void testScanEmptyDatabase() throws Exception {
@@ -303,7 +219,6 @@ public class AnalysisApiIntegrationTest {
                     .andExpect(jsonPath("$.matches", hasSize(0)));
         }
 
-        // Intent: Ensure unknown patterns don't cause errors (graceful degradation)
         @Test
         @DisplayName("Should handle unknown pattern type gracefully")
         void testScanWithUnknownPattern() throws Exception {
@@ -321,24 +236,15 @@ public class AnalysisApiIntegrationTest {
         }
     }
 
-    /**
-     * Tests for hammer pattern detection functionality.
-     */
     @Nested
     @DisplayName("Hammer Pattern Detection Tests")
     class HammerDetectionTests {
-        /**
-         * Sets up test data with various candlestick patterns.
-         */
-        // @BeforeEach: Runs before each test method to ensure clean, isolated test data
         @BeforeEach
         void setUpHammerTestData() {
-            // Start fresh: delete all data to prevent test pollution
             candlestickRepository.deleteAll();
             AnalysisApiIntegrationTestUtil.insertHammerTestDataToDb(candlestickRepository);
         }
 
-        // Intent: Verify core business logic detects hammer patterns from test data
         @Test
         @DisplayName("Should detect hammer patterns in test data")
         void testDetectHammerPatterns() throws Exception {
@@ -363,9 +269,8 @@ public class AnalysisApiIntegrationTest {
                     .andExpect(jsonPath("$.matches[*].symbol", hasItem("BOL.ST")));
         }
 
-        // Intent: Ensure confidence scores are calculated and within valid bounds
         @Test
-        @DisplayName("Should include confidence scores in hammer matches")
+        @DisplayName("Should include confidence scores (within valid bounds) in hammer matches")
         void testHammerConfidenceScores() throws Exception {
             ScanRequest request = new ScanRequest();
             request.setPatterns(Set.of("HAMMER"));
@@ -384,7 +289,6 @@ public class AnalysisApiIntegrationTest {
                     .andExpect(jsonPath("$.matches[0].timestamp").isNumber());
         }
 
-        // Intent: Test negative case - no matches should return empty results gracefully
         @Test
         @DisplayName("Should return no matches when no hammers in range")
         void testNoHammersDetected() throws Exception {
@@ -404,7 +308,6 @@ public class AnalysisApiIntegrationTest {
                     .andExpect(jsonPath("$.matches", hasSize(0)));
         }
 
-        // Intent: Verify results are ordered correctly for client display
         @Test
         @DisplayName("Should sort results by timestamp descending")
         void testResultsSortedByTimestamp() throws Exception {
@@ -423,11 +326,11 @@ public class AnalysisApiIntegrationTest {
                     .getResponse()
                     .getContentAsString();
 
-            // Deserialize JSON to POJO for complex validation
+            // Deserialize JSON to Plain Old Java Object (POJO) for complex validation
             var scanResponse = objectMapper.readValue(response, ScanResponse.class);
 
             // Verify descending order
-            // Manual assertion when jsonPath matchers are insufficient
+            // Manual assertion as jsonPath matchers are insufficient
             for (int i = 0; i < scanResponse.getMatches().size() - 1; i++) {
                 assertTrue(scanResponse.getMatches().get(i).getTimestamp() >=
                                 scanResponse.getMatches().get(i + 1).getTimestamp(),
@@ -493,9 +396,6 @@ public class AnalysisApiIntegrationTest {
         }
     }
 
-    /**
-     * Tests for high volume candlestick detection functionality.
-     */
     @Nested
     @DisplayName("High Volume Detection Tests")
     class HighVolumeDetectionTests {
@@ -540,8 +440,8 @@ public class AnalysisApiIntegrationTest {
                             .content(objectMapper.writeValueAsString(request)))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$", hasSize(2)))
-                    .andExpect(jsonPath("$[*].symbol", hasItem("BOL.ST")))
-                    .andExpect(jsonPath("$[*].symbol", hasItem("ABB.ST")));
+                    .andExpect(jsonPath("$[0].symbol").value("ABB.ST"))
+                    .andExpect(jsonPath("$[1].symbol").value("BOL.ST"));
         }
 
         @Test

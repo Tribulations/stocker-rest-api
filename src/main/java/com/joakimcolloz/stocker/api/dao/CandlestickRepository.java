@@ -74,4 +74,18 @@ public interface CandlestickRepository extends JpaRepository<Candlestick, Intege
             @Param("start") long start,
             @Param("end") long end
     );
+
+    /**
+     * Finds all candlesticks within a specified timestamp range (inclusive).
+     *
+     * This method is automatically implemented by Spring Data JPA based on the method name convention.
+     * The query generated is equivalent to:
+     * SELECT * FROM candlesticks WHERE timestamp >= startTimestamp AND timestamp <= endTimestamp
+     *
+     * @param startTimestamp the start of the time range (Unix timestamp in seconds), inclusive
+     * @param endTimestamp the end of the time range (Unix timestamp in seconds), inclusive
+     * @return list of all candlesticks within the specified range, ordered by their natural database order.
+     *         Returns an empty list if no candlesticks are found in the range.
+     */
+    List<Candlestick> findByTimestampBetween(long startTimestamp, long endTimestamp);
 }
