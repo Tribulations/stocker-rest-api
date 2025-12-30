@@ -106,6 +106,13 @@
 			<artifactId>lombok</artifactId>
 			<scope>provided</scope>
 		</dependency>
+
+		<!-- Technical Analysis -->
+		<dependency>
+			<groupId>org.ta4j</groupId>
+			<artifactId>ta4j-core</artifactId>
+			<version>0.21.0</version>
+		</dependency>
 	</dependencies>
 
 	<build>
