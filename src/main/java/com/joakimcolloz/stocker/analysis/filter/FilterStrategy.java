@@ -10,6 +10,7 @@ import org.ta4j.core.num.DecimalNum;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Comparator;
 import java.util.List;
 
 /**
@@ -58,7 +59,12 @@ public abstract class FilterStrategy {
     protected BarSeries convertToBarSeries(List<Candlestick> candlesticks, String seriesName) {
         BarSeries series = new BaseBarSeriesBuilder().withName(seriesName).build();
 
-        for (Candlestick candle : candlesticks) {
+         // SORT BY TIMESTAMP ASCENDING - ta4j requires chronological order
+        List<Candlestick> sortedCandles = candlesticks.stream()
+                .sorted(Comparator.comparingLong(Candlestick::getTimestamp))
+                .toList();
+
+        for (Candlestick candle : sortedCandles) {
             Instant instant = Instant.ofEpochSecond(candle.getTimestamp());
 
             // Create BaseBar
