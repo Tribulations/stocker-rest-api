@@ -76,6 +76,30 @@ public interface CandlestickRepository extends JpaRepository<Candlestick, Intege
     );
 
     /**
+     * Finds all candlesticks for a specific symbol within a specified timestamp range (inclusive).
+     *
+     * This method is automatically implemented by Spring Data JPA and exposed as a REST endpoint at:
+     * /api/candlesticks/search/findBySymbolAndTimestampBetween
+     *
+     * The generated query is equivalent to:
+     * SELECT * FROM candlesticks
+     * WHERE symbol = :symbol
+     * AND timestamp >= :startTimestamp
+     * AND timestamp <= :endTimestamp
+     *
+     * @param symbol the stock symbol to filter by (e.g., "BOL.ST", "ABB.ST")
+     * @param startTimestamp the start of the time range (Unix timestamp in seconds), inclusive
+     * @param endTimestamp the end of the time range (Unix timestamp in seconds), inclusive
+     * @return list of candlesticks matching the symbol and within the time range,
+     *         ordered by their natural database order. Returns an empty list if no matches found.
+     */
+    List<Candlestick> findBySymbolAndTimestampBetween(
+            String symbol,
+            long startTimestamp,
+            long endTimestamp
+    );
+
+    /**
      * Finds all candlesticks within a specified timestamp range (inclusive).
      *
      * This method is automatically implemented by Spring Data JPA based on the method name convention.
