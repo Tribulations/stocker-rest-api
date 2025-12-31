@@ -50,7 +50,7 @@ echo "Uploading $local_jar -> $remote_user@$server_host:$remote_dir/$remote_jar_
 scp -o BatchMode=yes "$local_jar" "$remote_user@$server_host:$remote_dir/$remote_jar_tmp_rel"
 
 echo "Updating symlink and restarting service on $remote_user@$server_host"
-ssh -o BatchMode=yes "$remote_user@$server_host" "set -euo pipefail; \
+ssh -tt -o BatchMode=yes "$remote_user@$server_host" "set -euo pipefail; \
 	cd '$remote_dir'; \
 	sudo systemctl stop '$service_name' || true; \
 	mv '$remote_jar_tmp_rel' '$remote_jar_rel'; \

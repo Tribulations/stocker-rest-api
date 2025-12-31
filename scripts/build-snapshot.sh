@@ -4,6 +4,8 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$repo_root"
 
+pre_head="$(git rev-parse HEAD)"
+
 backup="$(mktemp)"
 cp pom.xml "$backup"
 
@@ -26,9 +28,23 @@ echo "Version updated from $old_version to $new_version"
 echo "Running Maven clean install..."
 
 if ./mvnw clean install; then
-  rm -f "$backup"
   git add pom.xml
   git commit -m "Bump minor version"
+	current_branch="$(git rev-parse --abbrev-ref HEAD)"
+	if [[ "$current_branch" != "main" ]]; then
+	  mv "$backup" pom.xml
+	  git reset --hard "$pre_head"
+	  echo "Refusing to push: current branch is '$current_branch' (expected 'main')" >&2
+	  exit 1
+	fi
+	if git push origin main; then
+	  rm -f "$backup"
+	else
+	  mv "$backup" pom.xml
+	  git reset --hard "$pre_head"
+	  echo "git push failed; reverted version bump and local commit" >&2
+	  exit 1
+	fi
 else
   restore_pom
   exit 1
