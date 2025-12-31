@@ -3,6 +3,7 @@ package com.joakimcolloz.stocker.analysis.filter;
 import com.joakimcolloz.stocker.api.entity.Candlestick;
 import com.joakimcolloz.stocker.analysis.dto.FilterMatch;
 import com.fasterxml.jackson.databind.JsonNode;
+import lombok.extern.slf4j.Slf4j;
 import org.ta4j.core.BarSeries;
 import org.ta4j.core.BaseBar;
 import org.ta4j.core.BaseBarSeriesBuilder;
@@ -10,12 +11,14 @@ import org.ta4j.core.num.DecimalNum;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Comparator;
 import java.util.List;
 
 /**
  * Abstract base class for all filter strategies.
  * Filters can operate on either the full time series or a filtered subset.
  */
+@Slf4j
 public abstract class FilterStrategy {
 
     /**
@@ -58,21 +61,30 @@ public abstract class FilterStrategy {
     protected BarSeries convertToBarSeries(List<Candlestick> candlesticks, String seriesName) {
         BarSeries series = new BaseBarSeriesBuilder().withName(seriesName).build();
 
-        for (Candlestick candle : candlesticks) {
+         // SORT BY TIMESTAMP ASCENDING - ta4j requires chronological order
+        List<Candlestick> sortedCandles = candlesticks.stream()
+                .sorted(Comparator.comparingLong(Candlestick::getTimestamp))
+                .toList();
+
+        for (Candlestick candle : sortedCandles) {
             Instant instant = Instant.ofEpochSecond(candle.getTimestamp());
 
+            log.info("Converting candlestick {} to BaseBar", candle);
+
+
             // Create BaseBar
+            Duration tradingSession = Duration.ofSeconds(30600);
             BaseBar bar = new BaseBar(
-                    Duration.ofDays(1),                      // 1. Duration
-                    instant,                                  // 2. Begin time (Instant)
-                    instant.plus(Duration.ofDays(1)),        // 3. End time (Instant)
+                    tradingSession,                          // 1. Duration
+                    instant,                                 // 2. Begin time (Instant)
+                    instant.plus(tradingSession),            // 3. End time (Instant)
                     DecimalNum.valueOf(candle.getOpen()),    // 4. Open price
                     DecimalNum.valueOf(candle.getHigh()),    // 5. High price
                     DecimalNum.valueOf(candle.getLow()),     // 6. Low price
                     DecimalNum.valueOf(candle.getClose()),   // 7. Close price
                     DecimalNum.valueOf(candle.getVolume()),  // 8. Volume
                     DecimalNum.valueOf(0),                   // 9. Amount (0 if unknown)
-                    0L                                        // 10. Number of trades (0 if unknown)
+                    0L                                       // 10. Number of trades (0 if unknown)
             );
 
             series.addBar(bar);
