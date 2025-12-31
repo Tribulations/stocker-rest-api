@@ -15,6 +15,7 @@ import java.util.stream.Collectors;
 /**
  * Filter for RSI (Relative Strength Index) values.
  * This is a time-series filter - needs full data to calculate RSI properly.
+ * To avoid unrealistically low RSI values it is recommended to use at least (DEFAULT_RSI_PERIOD * 2) data points.
  */
 public class RSIFilter extends FilterStrategy {
 
@@ -29,13 +30,14 @@ public class RSIFilter extends FilterStrategy {
     public List<FilterMatch> apply(
             List<Candlestick> filteredData,
             List<Candlestick> fullData,
-            JsonNode params
+            JsonNode params // TODO: add RSI period as parameter
     ) {
         // TODO: use contants/enum for conditions and parameters
         double threshold = params.get("threshold").asDouble();
         String condition = params.get("condition").asText();  // "above" or "below"
 
         // Group full data by symbol
+        // TODO: this logic should be moved to other layer
         Map<String, List<Candlestick>> bySymbol = fullData.stream()
                 .collect(Collectors.groupingBy(Candlestick::getSymbol));
 
@@ -45,8 +47,14 @@ public class RSIFilter extends FilterStrategy {
             String symbol = entry.getKey();
             List<Candlestick> symbolData = entry.getValue();
 
-            // Convert to BarSeries and calculate RSI
+            // Convert to BarSeries
             BarSeries series = convertToBarSeries(symbolData, symbol);
+
+            if (series.getBarCount() < DEFAULT_RSI_PERIOD + 1) {
+                throw new IllegalStateException("To few data points to calculate RSI");
+            }
+
+            // Calculate RSI
             ClosePriceIndicator closePrice = new ClosePriceIndicator(series);
             RSIIndicator rsi = new RSIIndicator(closePrice, DEFAULT_RSI_PERIOD);
 
@@ -59,6 +67,10 @@ public class RSIFilter extends FilterStrategy {
                 if (index == -1 || index >= series.getBarCount()) continue;
 
                 double rsiValue = rsi.getValue(index).doubleValue();
+
+                if (index < DEFAULT_RSI_PERIOD || Double.isNaN(rsiValue)) {
+                    continue;
+                }
 
                 boolean matches_condition = condition.equals("above")
                         ? rsiValue > threshold
