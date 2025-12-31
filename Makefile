@@ -1,7 +1,10 @@
-.PHONY: build-snapshot deploy-snapshot deploy-snapshot-tag
+.PHONY: build-snapshot bump-minor-version deploy-snapshot deploy-snapshot-tag
 
 build-snapshot:
 	@bash scripts/build-snapshot.sh
+
+bump-minor-version:
+	@bash scripts/bump-minor-version.sh
 
 deploy-snapshot:
 	@if [ -n "$(SERVER_IP)" ]; then bash scripts/deploy-snapshot.sh "$(SERVER_IP)"; else bash scripts/deploy-snapshot.sh; fi
