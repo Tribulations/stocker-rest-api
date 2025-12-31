@@ -68,7 +68,7 @@ public class RSIFilter extends FilterStrategy {
 
                 double rsiValue = rsi.getValue(index).doubleValue();
 
-                if (index < DEFAULT_RSI_PERIOD || Double.isNaN(rsiValue)) {
+                if (index < DEFAULT_RSI_PERIOD || Double.isNaN(rsiValue) || rsiValue == 0 || rsiValue == 100) {
                     continue;
                 }
 
