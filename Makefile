@@ -1,4 +1,6 @@
-.PHONY: build-snapshot bump-minor-version deploy-snapshot deploy-snapshot-tag
+.PHONY: all build-snapshot bump-minor-version deploy-snapshot deploy-snapshot-tag
+
+all: build-snapshot deploy-snapshot-tag
 
 build-snapshot:
 	@bash scripts/build-snapshot.sh
