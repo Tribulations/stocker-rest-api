@@ -147,4 +147,8 @@ public class AnalysisService {
 
         return highVolumeCandlesticks;
     }
+
+    public List<String> findAllDistinctSymbols() {
+        return candlestickRepository.findAllDistinctSymbols();
+    }
 }

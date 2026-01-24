@@ -122,6 +122,11 @@ public class AnalysisController {
         return ResponseEntity.ok(statistics);
     }
 
+    @GetMapping("/symbols")
+    public List<String> findAllDistinctSymbols() {
+        return analysisService.findAllDistinctSymbols();
+    }
+
     /**
      * Identifies candlesticks with volume significantly above average.
      *
