@@ -147,4 +147,12 @@ public class AnalysisService {
 
         return highVolumeCandlesticks;
     }
+
+    public List<String> findAllDistinctSymbols() {
+        return candlestickRepository.findAllDistinctSymbols();
+    }
+
+    public List<Candlestick> findBySymbolAndTimestampBetween(String symbol, long startTimestamp, long endTimestamp) {
+        return candlestickRepository.findBySymbolAndTimestampBetween(symbol, startTimestamp, endTimestamp);
+    }
 }
