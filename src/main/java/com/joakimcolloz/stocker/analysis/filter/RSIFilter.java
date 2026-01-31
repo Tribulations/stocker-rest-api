@@ -1,6 +1,8 @@
 package com.joakimcolloz.stocker.analysis.filter;
 
 import com.joakimcolloz.stocker.api.entity.Candlestick;
+import com.joakimcolloz.stocker.analysis.error.AnalysisErrorCode;
+import com.joakimcolloz.stocker.analysis.error.InsufficientDataException;
 import com.joakimcolloz.stocker.analysis.dto.FilterMatch;
 import com.fasterxml.jackson.databind.JsonNode;
 import org.ta4j.core.BarSeries;
@@ -51,7 +53,16 @@ public class RSIFilter extends FilterStrategy {
             BarSeries series = convertToBarSeries(symbolData, symbol);
 
             if (series.getBarCount() < DEFAULT_RSI_PERIOD + 1) {
-                throw new IllegalStateException("To few data points to calculate RSI");
+                throw new InsufficientDataException(
+                        AnalysisErrorCode.RSI_TOO_FEW_DATA_POINTS,
+                        Map.of(
+                                "indicator", "RSI",
+                                "period", DEFAULT_RSI_PERIOD,
+                                "requiredPoints", DEFAULT_RSI_PERIOD + 1,
+                                "actualPoints", series.getBarCount(),
+                                "symbol", symbol
+                        )
+                );
             }
 
             // Calculate RSI

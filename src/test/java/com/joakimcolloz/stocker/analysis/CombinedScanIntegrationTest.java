@@ -295,7 +295,12 @@ public class CombinedScanIntegrationTest {
 						.contentType(MediaType.APPLICATION_JSON)
 						.content(objectMapper.writeValueAsString(request)))
 					.andExpect(status().isBadRequest())
-					.andExpect(jsonPath("$.message").value("To few data points to calculate RSI"));
+					.andExpect(jsonPath("$.code").value("RSI_TOO_FEW_DATA_POINTS"))
+					.andExpect(jsonPath("$.message").value("Too few data points to calculate RSI"))
+					.andExpect(jsonPath("$.details.indicator").value("RSI"))
+					.andExpect(jsonPath("$.details.period").value(14))
+					.andExpect(jsonPath("$.details.requiredPoints").value(15))
+					.andExpect(jsonPath("$.details.actualPoints").value(5));
 		}
     }
 
