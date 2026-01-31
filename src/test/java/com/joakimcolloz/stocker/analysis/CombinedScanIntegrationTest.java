@@ -283,8 +283,8 @@ public class CombinedScanIntegrationTest {
         }
 
 		@Test
-		@DisplayName("Should return 400 with error message when RSI calculation has too few data points")
-		void testRsiTooFewDataPointsReturnsMessage() throws Exception {
+		@DisplayName("Should skip symbols with insufficient RSI data and still return 200")
+		void testRsiTooFewDataPointsSkipsSymbol() throws Exception {
 			CombinedScanRequest request = new CombinedScanRequest();
 			request.setFilters(List.of(createRSIFilter(50, "above")));
 			request.setStartTimestamp(humanReadableToTimestamp("2024-01-01 09:00:00"));
@@ -294,13 +294,80 @@ public class CombinedScanIntegrationTest {
 						.header("X-API-Key", "test-api-key")
 						.contentType(MediaType.APPLICATION_JSON)
 						.content(objectMapper.writeValueAsString(request)))
-					.andExpect(status().isBadRequest())
-					.andExpect(jsonPath("$.code").value("RSI_TOO_FEW_DATA_POINTS"))
-					.andExpect(jsonPath("$.message").value("Too few data points to calculate RSI"))
-					.andExpect(jsonPath("$.details.indicator").value("RSI"))
-					.andExpect(jsonPath("$.details.period").value(14))
-					.andExpect(jsonPath("$.details.requiredPoints").value(15))
-					.andExpect(jsonPath("$.details.actualPoints").value(5));
+					.andExpect(status().isOk())
+					.andExpect(jsonPath("$", hasSize(0)));
+		}
+
+		@Test
+		@DisplayName("Should exclude symbols that fail RSI calculation but still return matches for other symbols")
+		void testPartialResultsWhenOneSymbolFailsRSI() throws Exception {
+			long baseTimestamp = humanReadableToTimestamp("2024-01-01 09:00:00");
+
+			List<Candlestick> extra = new ArrayList<>();
+
+			// MIX.ST - enough data points and mixed movement so RSI should be between 0 and 100
+			for (int i = 0; i < 15; i++) {
+				Candlestick c = new Candlestick();
+				c.setSymbol("MIX.ST");
+				c.setTimestamp(baseTimestamp + (i * 86400));
+				double open = 100.0 + i;
+				double close = (i % 5 == 0) ? open - 0.5 : open + 1.0;
+				c.setOpen(open);
+				c.setHigh(Math.max(open, close) + 1.0);
+				c.setLow(Math.min(open, close) - 1.0);
+				c.setClose(close);
+				c.setVolume(100L);
+				extra.add(c);
+			}
+			Candlestick mixSpike = new Candlestick();
+			mixSpike.setSymbol("MIX.ST");
+			mixSpike.setTimestamp(baseTimestamp + (15 * 86400));
+			mixSpike.setOpen(100.0);
+			mixSpike.setHigh(103.0);
+			mixSpike.setLow(99.0);
+			mixSpike.setClose(101.0);
+			mixSpike.setVolume(1000L);
+			extra.add(mixSpike);
+
+			// FAIL.ST - too few datapoints for RSI
+			for (int i = 0; i < 4; i++) {
+				Candlestick c = new Candlestick();
+				c.setSymbol("FAIL.ST");
+				c.setTimestamp(baseTimestamp + (i * 86400));
+				c.setOpen(50.0);
+				c.setHigh(51.0);
+				c.setLow(49.0);
+				c.setClose(50.0 + i);
+				c.setVolume(100L);
+				extra.add(c);
+			}
+			Candlestick failSpike = new Candlestick();
+			failSpike.setSymbol("FAIL.ST");
+			failSpike.setTimestamp(baseTimestamp + (4 * 86400));
+			failSpike.setOpen(54.0);
+			failSpike.setHigh(55.0);
+			failSpike.setLow(53.0);
+			failSpike.setClose(54.0);
+			failSpike.setVolume(1000L);
+			extra.add(failSpike);
+
+			candlestickRepository.saveAll(extra);
+
+			CombinedScanRequest request = new CombinedScanRequest();
+			request.setFilters(List.of(
+					createHighVolumeFilter(200),
+					createRSIFilter(40, "above")
+			));
+			request.setStartTimestamp(humanReadableToTimestamp("2024-01-01 00:00:00"));
+			request.setEndTimestamp(humanReadableToTimestamp("2024-01-20 23:59:59"));
+
+			mockMvc.perform(post("/api/analysis/combined-scan")
+						.header("X-API-Key", "test-api-key")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content(objectMapper.writeValueAsString(request)))
+					.andExpect(status().isOk())
+					.andExpect(jsonPath("$", hasSize(1)))
+					.andExpect(jsonPath("$[0].symbol").value("MIX.ST"));
 		}
     }
 
