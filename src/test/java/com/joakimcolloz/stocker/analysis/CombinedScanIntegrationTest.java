@@ -281,6 +281,22 @@ public class CombinedScanIntegrationTest {
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$", hasSize(0)));
         }
+
+		@Test
+		@DisplayName("Should return 400 with error message when RSI calculation has too few data points")
+		void testRsiTooFewDataPointsReturnsMessage() throws Exception {
+			CombinedScanRequest request = new CombinedScanRequest();
+			request.setFilters(List.of(createRSIFilter(50, "above")));
+			request.setStartTimestamp(humanReadableToTimestamp("2024-01-01 09:00:00"));
+			request.setEndTimestamp(humanReadableToTimestamp("2024-01-05 09:00:00"));
+
+			mockMvc.perform(post("/api/analysis/combined-scan")
+						.header("X-API-Key", "test-api-key")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content(objectMapper.writeValueAsString(request)))
+					.andExpect(status().isBadRequest())
+					.andExpect(jsonPath("$.message").value("To few data points to calculate RSI"));
+		}
     }
 
     @Nested

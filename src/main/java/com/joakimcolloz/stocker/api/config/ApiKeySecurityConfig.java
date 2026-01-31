@@ -61,7 +61,7 @@ public class ApiKeySecurityConfig {
                 .authorizeHttpRequests(authz -> authz
                         // Permit actuator and Swagger endpoints
                         .requestMatchers("/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs/**",
-                                "/api-docs/**", "/actuator/health", "/actuator/info")
+                                "/api-docs/**", "/actuator/health", "/actuator/info", "/error")
                         .permitAll()
                         // Require authentication for API endpoints
                         .requestMatchers("/api/**").authenticated()
