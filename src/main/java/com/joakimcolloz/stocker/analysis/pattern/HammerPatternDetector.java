@@ -7,6 +7,10 @@ import org.springframework.stereotype.Component;
 
 import java.util.List;
 
+/**
+ * {@link PatternDetector} implementation for {@link PatternType#HAMMER}.
+ * Delegates detection to {@link PatternDetectionService}.
+ */
 @Component
 public class HammerPatternDetector implements PatternDetector {
 	private final PatternDetectionService patternDetectionService;

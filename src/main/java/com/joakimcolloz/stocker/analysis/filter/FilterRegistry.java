@@ -5,6 +5,10 @@ import org.springframework.stereotype.Component;
 import java.util.EnumMap;
 import java.util.Map;
 
+/**
+ * Registry that maps a requested filter type to its {@link FilterStrategy} implementation.
+ * Used by {@link com.joakimcolloz.stocker.analysis.service.CombinedScanService}.
+ */
 @Component
 public class FilterRegistry {
 	private final Map<FilterType, FilterStrategy> filters;

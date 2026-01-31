@@ -7,6 +7,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
+/**
+ * Registry that resolves request pattern codes into {@link PatternDetector} strategies.
+ * Used by {@link com.joakimcolloz.stocker.analysis.service.AnalysisService}.
+ */
 @Component
 public class PatternRegistry {
 	private final Map<PatternType, PatternDetector> detectors;

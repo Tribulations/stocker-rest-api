@@ -5,6 +5,10 @@ import com.joakimcolloz.stocker.api.entity.Candlestick;
 
 import java.util.List;
 
+/**
+ * Strategy interface for detecting a single {@link PatternType}.
+ * Discovered and used via {@link PatternRegistry}.
+ */
 public interface PatternDetector {
 	PatternType getPatternType();
 

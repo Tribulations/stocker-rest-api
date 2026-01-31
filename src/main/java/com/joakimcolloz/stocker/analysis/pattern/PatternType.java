@@ -6,6 +6,12 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 
+/**
+ * Supported candlestick patterns and their public metadata.
+ * <p>
+ * Used by {@link com.joakimcolloz.stocker.analysis.controller.AnalysisController} to list supported patterns
+ * and by {@link PatternRegistry} to resolve detectors.
+ */
 public enum PatternType {
 	HAMMER("HAMMER", "Hammer", "Bullish reversal with long lower shadow", "BULLISH");
 
