@@ -7,6 +7,7 @@ import com.joakimcolloz.stocker.analysis.dto.PatternInfo;
 import com.joakimcolloz.stocker.analysis.dto.PatternMatch;
 import com.joakimcolloz.stocker.analysis.dto.ScanRequest;
 import com.joakimcolloz.stocker.analysis.dto.ScanResponse;
+import com.joakimcolloz.stocker.analysis.pattern.PatternType;
 import com.joakimcolloz.stocker.analysis.service.AnalysisService;
 
 import com.joakimcolloz.stocker.api.entity.Candlestick;
@@ -76,17 +77,7 @@ public class AnalysisController {
     @Operation(summary = "Get supported patterns",
             description = "Returns all available pattern types that can be detected")
     public ResponseEntity<List<PatternInfo>> getSupportedPatterns() {
-        List<PatternInfo> patterns = List.of(
-                new PatternInfo(
-                        "HAMMER",
-                        "Hammer",
-                        "Bullish reversal with long lower shadow",
-                        "BULLISH"
-                )
-                // Add more patterns here as they're implemented
-        );
-
-        return ResponseEntity.ok(patterns);
+        return ResponseEntity.ok(PatternType.supportedPatterns());
     }
 
     /**

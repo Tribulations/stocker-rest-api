@@ -5,7 +5,7 @@ import com.joakimcolloz.stocker.api.entity.Candlestick;
 import com.joakimcolloz.stocker.analysis.dto.CombinedScanRequest;
 import com.joakimcolloz.stocker.analysis.dto.FilterMatch;
 import com.joakimcolloz.stocker.analysis.dto.FilterRequest;
-import com.joakimcolloz.stocker.analysis.filter.FilterFactory;
+import com.joakimcolloz.stocker.analysis.filter.FilterRegistry;
 import com.joakimcolloz.stocker.analysis.filter.FilterStrategy;
 import org.springframework.stereotype.Service;
 
@@ -19,9 +19,11 @@ import java.util.List;
 public class CombinedScanService {
 
     private final CandlestickRepository candlestickRepository;
+    private final FilterRegistry filterRegistry;
 
-    public CombinedScanService(CandlestickRepository candlestickRepository) {
+    public CombinedScanService(CandlestickRepository candlestickRepository, FilterRegistry filterRegistry) {
         this.candlestickRepository = candlestickRepository;
+        this.filterRegistry = filterRegistry;
     }
 
     /**
@@ -45,7 +47,7 @@ public class CombinedScanService {
 
         // Apply each filter sequentially
         for (FilterRequest filterRequest : request.getFilters()) {
-            FilterStrategy filter = FilterFactory.getFilter(filterRequest.getType());
+            FilterStrategy filter = filterRegistry.getFilter(filterRequest.getType());
 
             // Apply filter based on whether it needs full time series
             List<FilterMatch> filterMatches;

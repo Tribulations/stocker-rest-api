@@ -1,0 +1,12 @@
+package com.joakimcolloz.stocker.analysis.pattern;
+
+import com.joakimcolloz.stocker.analysis.dto.PatternMatch;
+import com.joakimcolloz.stocker.api.entity.Candlestick;
+
+import java.util.List;
+
+public interface PatternDetector {
+	PatternType getPatternType();
+
+	List<PatternMatch> detect(List<Candlestick> candlesticks);
+}

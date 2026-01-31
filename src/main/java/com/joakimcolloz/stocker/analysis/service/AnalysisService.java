@@ -5,6 +5,7 @@ import com.joakimcolloz.stocker.analysis.dto.HighVolumeCandlestick;
 import com.joakimcolloz.stocker.analysis.dto.HighVolumeRequest;
 import com.joakimcolloz.stocker.analysis.dto.PatternMatch;
 import com.joakimcolloz.stocker.analysis.dto.ScanRequest;
+import com.joakimcolloz.stocker.analysis.pattern.PatternRegistry;
 import com.joakimcolloz.stocker.api.dao.CandlestickRepository;
 import com.joakimcolloz.stocker.api.entity.Candlestick;
 import org.springframework.stereotype.Service;
@@ -27,12 +28,12 @@ import java.util.Map;
 public class AnalysisService {
 
     private final CandlestickRepository candlestickRepository;
-    private final PatternDetectionService patternDetectionService;
+    private final PatternRegistry patternRegistry;
 
     public AnalysisService(CandlestickRepository candlestickRepository,
-                           PatternDetectionService patternDetectionService) {
+                           PatternRegistry patternRegistry) {
         this.candlestickRepository = candlestickRepository;
-        this.patternDetectionService = patternDetectionService;
+        this.patternRegistry = patternRegistry;
     }
 
     /**
@@ -53,9 +54,8 @@ public class AnalysisService {
 
         // Run requested pattern detections
         for (String pattern : request.getPatterns()) {
-            if ("HAMMER".equalsIgnoreCase(pattern)) {
-                allMatches.addAll(patternDetectionService.detectHammer(candlesticks));
-            }
+            patternRegistry.findDetector(pattern)
+                    .ifPresent(detector -> allMatches.addAll(detector.detect(candlesticks)));
             // TODO: Add future patterns here
         }
 
