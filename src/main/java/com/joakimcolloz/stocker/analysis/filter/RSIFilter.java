@@ -1,8 +1,6 @@
 package com.joakimcolloz.stocker.analysis.filter;
 
 import com.joakimcolloz.stocker.api.entity.Candlestick;
-import com.joakimcolloz.stocker.analysis.error.AnalysisErrorCode;
-import com.joakimcolloz.stocker.analysis.error.InsufficientDataException;
 import com.joakimcolloz.stocker.analysis.dto.FilterMatch;
 import com.fasterxml.jackson.databind.JsonNode;
 import org.ta4j.core.BarSeries;
@@ -10,6 +8,7 @@ import org.ta4j.core.indicators.RSIIndicator;
 import org.ta4j.core.indicators.helpers.ClosePriceIndicator;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -43,26 +42,30 @@ public class RSIFilter extends FilterStrategy {
         Map<String, List<Candlestick>> bySymbol = fullData.stream()
                 .collect(Collectors.groupingBy(Candlestick::getSymbol));
 
+        // Only evaluate symbols that are still present after previous filters
+        Map<String, List<Candlestick>> filteredBySymbol = filteredData.stream()
+                .collect(Collectors.groupingBy(Candlestick::getSymbol));
+
         List<FilterMatch> matches = new ArrayList<>();
 
-        for (Map.Entry<String, List<Candlestick>> entry : bySymbol.entrySet()) {
+        for (Map.Entry<String, List<Candlestick>> entry : filteredBySymbol.entrySet()) {
             String symbol = entry.getKey();
-            List<Candlestick> symbolData = entry.getValue();
+            List<Candlestick> symbolFilteredData = entry.getValue();
+
+            List<Candlestick> symbolData = bySymbol.get(symbol);
+            if (symbolData == null || symbolData.isEmpty()) {
+                continue;
+            }
+
+            List<Candlestick> sortedSymbolData = symbolData.stream()
+                    .sorted(Comparator.comparingLong(Candlestick::getTimestamp))
+                    .toList();
 
             // Convert to BarSeries
-            BarSeries series = convertToBarSeries(symbolData, symbol);
+            BarSeries series = convertToBarSeries(sortedSymbolData, symbol);
 
             if (series.getBarCount() < DEFAULT_RSI_PERIOD + 1) {
-                throw new InsufficientDataException(
-                        AnalysisErrorCode.RSI_TOO_FEW_DATA_POINTS,
-                        Map.of(
-                                "indicator", "RSI",
-                                "period", DEFAULT_RSI_PERIOD,
-                                "requiredPoints", DEFAULT_RSI_PERIOD + 1,
-                                "actualPoints", series.getBarCount(),
-                                "symbol", symbol
-                        )
-                );
+                continue;
             }
 
             // Calculate RSI
@@ -70,11 +73,10 @@ public class RSIFilter extends FilterStrategy {
             RSIIndicator rsi = new RSIIndicator(closePrice, DEFAULT_RSI_PERIOD);
 
             // Check filtered data against RSI values
-            for (Candlestick candle : filteredData) {
-                if (!candle.getSymbol().equals(symbol)) continue;
+            for (Candlestick candle : symbolFilteredData) {
 
                 // Find index of this candlestick in the series
-                int index = findCandlestickIndex(symbolData, candle);
+                int index = findCandlestickIndex(sortedSymbolData, candle);
                 if (index == -1 || index >= series.getBarCount()) continue;
 
                 double rsiValue = rsi.getValue(index).doubleValue();
