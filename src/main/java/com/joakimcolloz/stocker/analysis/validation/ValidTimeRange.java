@@ -9,6 +9,11 @@ import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
+/**
+ * Validates that a request DTO's time range is ordered correctly.
+ * Intended to be used together with field-level constraints (e.g. {@code @Positive})
+ * to keep request validation centralized and consistent.
+ */
 @Documented
 @Constraint(validatedBy = {ValidTimeRangeValidator.class})
 @Target({ElementType.TYPE})

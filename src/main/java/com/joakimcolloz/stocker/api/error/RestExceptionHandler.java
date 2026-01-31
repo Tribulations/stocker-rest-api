@@ -35,11 +35,14 @@ public class RestExceptionHandler {
 
 	@ExceptionHandler(MethodArgumentNotValidException.class)
 	public ResponseEntity<Void> handleMethodArgumentNotValidException(MethodArgumentNotValidException ex) {
+		// TODO; Change this later: Intentionally return an empty-body 400 to preserve previous controller behavior
+		// (controllers used ResponseEntity.badRequest().build() for validation failures).
 		return ResponseEntity.badRequest().build();
 	}
 
 	@ExceptionHandler(ConstraintViolationException.class)
 	public ResponseEntity<Void> handleConstraintViolationException(ConstraintViolationException ex) {
+		// TODO; Change this later: Intentionally return an empty-body 400 to preserve previous controller behavior.
 		return ResponseEntity.badRequest().build();
 	}
 }
