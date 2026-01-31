@@ -1,5 +1,9 @@
 package com.joakimcolloz.stocker.analysis.dto;
 
+import com.joakimcolloz.stocker.analysis.validation.TimeRangeRequest;
+import com.joakimcolloz.stocker.analysis.validation.ValidTimeRange;
+import jakarta.validation.constraints.NotEmpty;
+import jakarta.validation.constraints.Positive;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -15,8 +19,14 @@ import java.util.Set;
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-public class ScanRequest {
-    private Set<String> patterns;
-    private long startTimestamp;
-    private long endTimestamp;
+@ValidTimeRange
+public class ScanRequest implements TimeRangeRequest {
+	@NotEmpty
+	private Set<String> patterns;
+
+	@Positive
+	private long startTimestamp;
+
+	@Positive
+	private long endTimestamp;
 }

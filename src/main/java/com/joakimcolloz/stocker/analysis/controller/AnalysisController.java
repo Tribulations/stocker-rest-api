@@ -13,6 +13,8 @@ import com.joakimcolloz.stocker.api.entity.Candlestick;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 
+import jakarta.validation.Valid;
+
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -56,20 +58,7 @@ public class AnalysisController {
     @PostMapping("/scan")
     @Operation(summary = "Scan for patterns",
             description = "Analyzes all stocks in the given time range for selected patterns")
-    public ResponseEntity<ScanResponse> scanPatterns(@RequestBody ScanRequest request) {
-        // Validate request
-        if (request.getPatterns() == null || request.getPatterns().isEmpty()) {
-            return ResponseEntity.badRequest().build();
-        }
-
-        if (request.getStartTimestamp() <= 0 || request.getEndTimestamp() <= 0) {
-            return ResponseEntity.badRequest().build();
-        }
-
-        if (request.getStartTimestamp() > request.getEndTimestamp()) {
-            return ResponseEntity.badRequest().build();
-        }
-
+    public ResponseEntity<ScanResponse> scanPatterns(@Valid @RequestBody ScanRequest request) {
         // Perform analysis
         List<PatternMatch> matches = analysisService.scanPatterns(request);
 
@@ -147,20 +136,7 @@ public class AnalysisController {
     @PostMapping("/high-volume")
     @Operation(summary = "Find high volume candlesticks",
             description = "Identifies candlesticks where volume exceeds the average by a specified percentage within the time range")
-    public ResponseEntity<List<HighVolumeCandlestick>> findHighVolume(@RequestBody HighVolumeRequest request) {
-        // Validate request
-        if (request.getStartTimestamp() <= 0 || request.getEndTimestamp() <= 0) {
-            return ResponseEntity.badRequest().build();
-        }
-
-        if (request.getStartTimestamp() > request.getEndTimestamp()) {
-            return ResponseEntity.badRequest().build();
-        }
-
-        if (request.getPercentageAbove() < 0) {
-            return ResponseEntity.badRequest().build();
-        }
-
+    public ResponseEntity<List<HighVolumeCandlestick>> findHighVolume(@Valid @RequestBody HighVolumeRequest request) {
         // Find high volume candlesticks
         List<HighVolumeCandlestick> results = analysisService.findHighVolumeCandlesticks(request);
 

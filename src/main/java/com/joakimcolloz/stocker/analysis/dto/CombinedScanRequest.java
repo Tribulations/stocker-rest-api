@@ -1,5 +1,9 @@
 package com.joakimcolloz.stocker.analysis.dto;
 
+import com.joakimcolloz.stocker.analysis.validation.TimeRangeRequest;
+import com.joakimcolloz.stocker.analysis.validation.ValidTimeRange;
+import jakarta.validation.constraints.NotEmpty;
+import jakarta.validation.constraints.Positive;
 import lombok.Data;
 
 import java.util.List;
@@ -8,8 +12,14 @@ import java.util.List;
  * Request payload for combined filter scanning.
  */
 @Data
-public class CombinedScanRequest {
-    private List<FilterRequest> filters;
-    private long startTimestamp;
-    private long endTimestamp;
+@ValidTimeRange
+public class CombinedScanRequest implements TimeRangeRequest {
+	@NotEmpty
+	private List<FilterRequest> filters;
+
+	@Positive
+	private long startTimestamp;
+
+	@Positive
+	private long endTimestamp;
 }
