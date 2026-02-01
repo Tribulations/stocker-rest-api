@@ -1,17 +1,20 @@
 package com.joakimcolloz.stocker.analysis.controller;
 
-import com.joakimcolloz.stocker.analysis.dto.AverageVolumeStatistic;
-import com.joakimcolloz.stocker.analysis.dto.HighVolumeCandlestick;
-import com.joakimcolloz.stocker.analysis.dto.HighVolumeRequest;
-import com.joakimcolloz.stocker.analysis.dto.PatternInfo;
-import com.joakimcolloz.stocker.analysis.dto.PatternMatch;
-import com.joakimcolloz.stocker.analysis.dto.ScanRequest;
-import com.joakimcolloz.stocker.analysis.dto.ScanResponse;
+import com.joakimcolloz.stocker.analysis.dto.pattern.PatternInfo;
+import com.joakimcolloz.stocker.analysis.dto.pattern.PatternMatch;
+import com.joakimcolloz.stocker.analysis.dto.request.HighVolumeRequest;
+import com.joakimcolloz.stocker.analysis.dto.request.ScanRequest;
+import com.joakimcolloz.stocker.analysis.dto.response.ScanResponse;
+import com.joakimcolloz.stocker.analysis.dto.statistics.AverageVolumeStatistic;
+import com.joakimcolloz.stocker.analysis.dto.statistics.HighVolumeCandlestick;
+import com.joakimcolloz.stocker.analysis.pattern.PatternType;
 import com.joakimcolloz.stocker.analysis.service.AnalysisService;
 
 import com.joakimcolloz.stocker.api.entity.Candlestick;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+
+import jakarta.validation.Valid;
 
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -56,20 +59,7 @@ public class AnalysisController {
     @PostMapping("/scan")
     @Operation(summary = "Scan for patterns",
             description = "Analyzes all stocks in the given time range for selected patterns")
-    public ResponseEntity<ScanResponse> scanPatterns(@RequestBody ScanRequest request) {
-        // Validate request
-        if (request.getPatterns() == null || request.getPatterns().isEmpty()) {
-            return ResponseEntity.badRequest().build();
-        }
-
-        if (request.getStartTimestamp() <= 0 || request.getEndTimestamp() <= 0) {
-            return ResponseEntity.badRequest().build();
-        }
-
-        if (request.getStartTimestamp() > request.getEndTimestamp()) {
-            return ResponseEntity.badRequest().build();
-        }
-
+    public ResponseEntity<ScanResponse> scanPatterns(@Valid @RequestBody ScanRequest request) {
         // Perform analysis
         List<PatternMatch> matches = analysisService.scanPatterns(request);
 
@@ -87,17 +77,7 @@ public class AnalysisController {
     @Operation(summary = "Get supported patterns",
             description = "Returns all available pattern types that can be detected")
     public ResponseEntity<List<PatternInfo>> getSupportedPatterns() {
-        List<PatternInfo> patterns = List.of(
-                new PatternInfo(
-                        "HAMMER",
-                        "Hammer",
-                        "Bullish reversal with long lower shadow",
-                        "BULLISH"
-                )
-                // Add more patterns here as they're implemented
-        );
-
-        return ResponseEntity.ok(patterns);
+        return ResponseEntity.ok(PatternType.supportedPatterns());
     }
 
     /**
@@ -147,20 +127,7 @@ public class AnalysisController {
     @PostMapping("/high-volume")
     @Operation(summary = "Find high volume candlesticks",
             description = "Identifies candlesticks where volume exceeds the average by a specified percentage within the time range")
-    public ResponseEntity<List<HighVolumeCandlestick>> findHighVolume(@RequestBody HighVolumeRequest request) {
-        // Validate request
-        if (request.getStartTimestamp() <= 0 || request.getEndTimestamp() <= 0) {
-            return ResponseEntity.badRequest().build();
-        }
-
-        if (request.getStartTimestamp() > request.getEndTimestamp()) {
-            return ResponseEntity.badRequest().build();
-        }
-
-        if (request.getPercentageAbove() < 0) {
-            return ResponseEntity.badRequest().build();
-        }
-
+    public ResponseEntity<List<HighVolumeCandlestick>> findHighVolume(@Valid @RequestBody HighVolumeRequest request) {
         // Find high volume candlesticks
         List<HighVolumeCandlestick> results = analysisService.findHighVolumeCandlesticks(request);
 

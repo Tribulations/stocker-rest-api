@@ -2,10 +2,10 @@ package com.joakimcolloz.stocker.api;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
-import com.joakimcolloz.stocker.analysis.dto.HighVolumeCandlestick;
-import com.joakimcolloz.stocker.analysis.dto.HighVolumeRequest;
-import com.joakimcolloz.stocker.analysis.dto.ScanRequest;
-import com.joakimcolloz.stocker.analysis.dto.ScanResponse;
+import com.joakimcolloz.stocker.analysis.dto.request.HighVolumeRequest;
+import com.joakimcolloz.stocker.analysis.dto.request.ScanRequest;
+import com.joakimcolloz.stocker.analysis.dto.response.ScanResponse;
+import com.joakimcolloz.stocker.analysis.dto.statistics.HighVolumeCandlestick;
 import com.joakimcolloz.stocker.api.dao.CandlestickRepository;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -69,6 +69,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @DisplayName("Analysis API Integration Tests")
 public class AnalysisApiIntegrationTest {
     @Container
+    @SuppressWarnings("resource")
     public static PostgreSQLContainer<?> postgreSQLContainer = new PostgreSQLContainer<>("postgres:13-alpine")
             .withDatabaseName("testdb")
             .withUsername("test")

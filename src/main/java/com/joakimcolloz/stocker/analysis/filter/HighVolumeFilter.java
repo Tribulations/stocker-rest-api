@@ -1,8 +1,9 @@
 package com.joakimcolloz.stocker.analysis.filter;
 
 import com.joakimcolloz.stocker.api.entity.Candlestick;
-import com.joakimcolloz.stocker.analysis.dto.FilterMatch;
-import com.fasterxml.jackson.databind.JsonNode;
+import com.joakimcolloz.stocker.analysis.dto.filter.FilterMatch;
+import com.joakimcolloz.stocker.analysis.dto.filter.FilterParams;
+import com.joakimcolloz.stocker.analysis.dto.filter.HighVolumeFilterParams;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -24,9 +25,16 @@ public class HighVolumeFilter extends FilterStrategy {
     public List<FilterMatch> apply(
             List<Candlestick> filteredData,
             List<Candlestick> fullData,
-            JsonNode params
+            FilterParams params
     ) {
-        int percentageAbove = params.get("percentageAbove").asInt();
+        if (!(params instanceof HighVolumeFilterParams hvParams)) {
+            throw new IllegalArgumentException("Invalid parameters for HIGH_VOLUME filter");
+        }
+        if (hvParams.getPercentageAbove() == null) {
+            throw new IllegalArgumentException("Missing parameters for HIGH_VOLUME filter");
+        }
+
+        int percentageAbove = hvParams.getPercentageAbove();
 
         // Group by symbol
         Map<String, List<Candlestick>> bySymbol = filteredData.stream()
@@ -35,7 +43,6 @@ public class HighVolumeFilter extends FilterStrategy {
         List<FilterMatch> matches = new ArrayList<>();
 
         for (Map.Entry<String, List<Candlestick>> entry : bySymbol.entrySet()) {
-            String symbol = entry.getKey(); // TODO: why declare when unused?
             List<Candlestick> symbolData = entry.getValue();
 
             // Calculate average volume

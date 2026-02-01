@@ -1,5 +1,6 @@
-package com.joakimcolloz.stocker.analysis.dto;
+package com.joakimcolloz.stocker.analysis.dto.response;
 
+import com.joakimcolloz.stocker.analysis.dto.pattern.PatternMatch;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;

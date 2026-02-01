@@ -1,8 +1,10 @@
 package com.joakimcolloz.stocker.analysis;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.joakimcolloz.stocker.analysis.dto.CombinedScanRequest;
-import com.joakimcolloz.stocker.analysis.dto.FilterRequest;
+import com.joakimcolloz.stocker.analysis.dto.filter.FilterRequest;
+import com.joakimcolloz.stocker.analysis.dto.filter.HighVolumeFilterParams;
+import com.joakimcolloz.stocker.analysis.dto.filter.RsiFilterParams;
+import com.joakimcolloz.stocker.analysis.dto.request.CombinedScanRequest;
 import com.joakimcolloz.stocker.api.dao.CandlestickRepository;
 import com.joakimcolloz.stocker.api.entity.Candlestick;
 import org.junit.jupiter.api.BeforeEach;
@@ -43,6 +45,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 public class CombinedScanIntegrationTest {
 
     @Container
+    @SuppressWarnings("resource")
     public static PostgreSQLContainer<?> postgreSQLContainer = new PostgreSQLContainer<>("postgres:13-alpine")
             .withDatabaseName("testdb")
             .withUsername("test")
@@ -458,16 +461,14 @@ public class CombinedScanIntegrationTest {
     private FilterRequest createHighVolumeFilter(int percentageAbove) {
         FilterRequest filter = new FilterRequest();
         filter.setType("HIGH_VOLUME");
-        filter.setParams(objectMapper.createObjectNode().put("percentageAbove", percentageAbove));
+        filter.setParams(new HighVolumeFilterParams(percentageAbove));
         return filter;
     }
 
     private FilterRequest createRSIFilter(double threshold, String condition) {
         FilterRequest filter = new FilterRequest();
         filter.setType("RSI");
-        filter.setParams(objectMapper.createObjectNode()
-                .put("threshold", threshold)
-                .put("condition", condition));
+        filter.setParams(new RsiFilterParams(threshold, condition));
         return filter;
     }
 }

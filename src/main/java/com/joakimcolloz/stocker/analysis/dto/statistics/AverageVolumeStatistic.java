@@ -1,4 +1,4 @@
-package com.joakimcolloz.stocker.analysis.dto;
+package com.joakimcolloz.stocker.analysis.dto.statistics;
 
 import lombok.AllArgsConstructor;
 import lombok.Data;

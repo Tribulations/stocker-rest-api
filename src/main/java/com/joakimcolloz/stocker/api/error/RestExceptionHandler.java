@@ -1,10 +1,12 @@
 package com.joakimcolloz.stocker.api.error;
 
 import com.joakimcolloz.stocker.analysis.error.AnalysisException;
+import jakarta.validation.ConstraintViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.bind.MethodArgumentNotValidException;
 
 import java.util.Map;
 
@@ -30,4 +32,22 @@ public class RestExceptionHandler {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(Map.of("message", ex.getMessage()));
     }
+
+	@ExceptionHandler(MethodArgumentNotValidException.class)
+	public ResponseEntity<Void> handleMethodArgumentNotValidException(MethodArgumentNotValidException ex) {
+		// TODO; Change this later: Intentionally return an empty-body 400 to preserve previous controller behavior
+		// (controllers used ResponseEntity.badRequest().build() for validation failures).
+		return ResponseEntity.badRequest().build();
+	}
+
+	@ExceptionHandler(ConstraintViolationException.class)
+	public ResponseEntity<Void> handleConstraintViolationException(ConstraintViolationException ex) {
+		// TODO; Change this later: Intentionally return an empty-body 400 to preserve previous controller behavior.
+		return ResponseEntity.badRequest().build();
+	}
+
+	@ExceptionHandler(IllegalArgumentException.class)
+	public ResponseEntity<Void> handleIllegalArgumentException(IllegalArgumentException ex) {
+		return ResponseEntity.badRequest().build();
+	}
 }

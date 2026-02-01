@@ -1,8 +1,9 @@
 package com.joakimcolloz.stocker.analysis.filter;
 
 import com.joakimcolloz.stocker.api.entity.Candlestick;
-import com.joakimcolloz.stocker.analysis.dto.FilterMatch;
-import com.fasterxml.jackson.databind.JsonNode;
+import com.joakimcolloz.stocker.analysis.dto.filter.FilterMatch;
+import com.joakimcolloz.stocker.analysis.dto.filter.FilterParams;
+import com.joakimcolloz.stocker.analysis.dto.filter.RsiFilterParams;
 import org.ta4j.core.BarSeries;
 import org.ta4j.core.indicators.RSIIndicator;
 import org.ta4j.core.indicators.helpers.ClosePriceIndicator;
@@ -31,11 +32,19 @@ public class RSIFilter extends FilterStrategy {
     public List<FilterMatch> apply(
             List<Candlestick> filteredData,
             List<Candlestick> fullData,
-            JsonNode params // TODO: add RSI period as parameter
+            FilterParams params // TODO: add RSI period as parameter
     ) {
         // TODO: use contants/enum for conditions and parameters
-        double threshold = params.get("threshold").asDouble();
-        String condition = params.get("condition").asText();  // "above" or "below"
+        if (!(params instanceof RsiFilterParams rsiParams)) {
+            throw new IllegalArgumentException("Invalid parameters for RSI filter");
+        }
+
+        if (rsiParams.getThreshold() == null || rsiParams.getCondition() == null) {
+            throw new IllegalArgumentException("Missing parameters for RSI filter");
+        }
+
+        double threshold = rsiParams.getThreshold();
+        String condition = rsiParams.getCondition();  // "above" or "below"
 
         // Group full data by symbol
         // TODO: this logic should be moved to other layer

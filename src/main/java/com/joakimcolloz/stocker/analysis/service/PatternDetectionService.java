@@ -1,6 +1,6 @@
 package com.joakimcolloz.stocker.analysis.service;
 
-import com.joakimcolloz.stocker.analysis.dto.PatternMatch;
+import com.joakimcolloz.stocker.analysis.dto.pattern.PatternMatch;
 import com.joakimcolloz.stocker.api.entity.Candlestick;
 import org.springframework.stereotype.Service;
 
