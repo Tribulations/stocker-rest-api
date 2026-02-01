@@ -45,6 +45,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 public class CombinedScanIntegrationTest {
 
     @Container
+    @SuppressWarnings("resource")
     public static PostgreSQLContainer<?> postgreSQLContainer = new PostgreSQLContainer<>("postgres:13-alpine")
             .withDatabaseName("testdb")
             .withUsername("test")

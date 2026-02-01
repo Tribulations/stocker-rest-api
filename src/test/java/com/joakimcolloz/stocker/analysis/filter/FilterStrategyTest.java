@@ -1,6 +1,5 @@
 package com.joakimcolloz.stocker.analysis.filter;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.joakimcolloz.stocker.api.entity.Candlestick;
 import com.joakimcolloz.stocker.analysis.dto.filter.FilterMatch;
 import com.joakimcolloz.stocker.analysis.dto.filter.HighVolumeFilterParams;
@@ -21,13 +20,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 @DisplayName("Filter Strategy Unit Tests")
 class FilterStrategyTest {
-
-    private ObjectMapper objectMapper;
     private List<Candlestick> testData;
 
     @BeforeEach
     void setUp() {
-        objectMapper = new ObjectMapper();
         testData = createTestCandlesticks();
     }
 

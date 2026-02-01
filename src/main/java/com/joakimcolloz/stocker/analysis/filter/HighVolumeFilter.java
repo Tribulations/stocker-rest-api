@@ -37,7 +37,6 @@ public class HighVolumeFilter extends FilterStrategy {
         List<FilterMatch> matches = new ArrayList<>();
 
         for (Map.Entry<String, List<Candlestick>> entry : bySymbol.entrySet()) {
-            String symbol = entry.getKey(); // TODO: why declare when unused?
             List<Candlestick> symbolData = entry.getValue();
 
             // Calculate average volume
