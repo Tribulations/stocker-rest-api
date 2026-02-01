@@ -1,6 +1,6 @@
 package com.joakimcolloz.stocker.analysis.pattern;
 
-import com.joakimcolloz.stocker.analysis.dto.PatternInfo;
+import com.joakimcolloz.stocker.analysis.dto.pattern.PatternInfo;
 
 import java.util.Arrays;
 import java.util.List;

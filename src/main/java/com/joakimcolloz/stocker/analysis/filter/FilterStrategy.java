@@ -1,8 +1,8 @@
 package com.joakimcolloz.stocker.analysis.filter;
 
 import com.joakimcolloz.stocker.api.entity.Candlestick;
-import com.joakimcolloz.stocker.analysis.dto.FilterParams;
-import com.joakimcolloz.stocker.analysis.dto.FilterMatch;
+import com.joakimcolloz.stocker.analysis.dto.filter.FilterMatch;
+import com.joakimcolloz.stocker.analysis.dto.filter.FilterParams;
 import lombok.extern.slf4j.Slf4j;
 import org.ta4j.core.BarSeries;
 import org.ta4j.core.BaseBar;

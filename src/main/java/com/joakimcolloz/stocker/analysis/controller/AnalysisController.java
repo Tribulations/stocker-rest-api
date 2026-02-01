@@ -1,12 +1,12 @@
 package com.joakimcolloz.stocker.analysis.controller;
 
-import com.joakimcolloz.stocker.analysis.dto.AverageVolumeStatistic;
-import com.joakimcolloz.stocker.analysis.dto.HighVolumeCandlestick;
-import com.joakimcolloz.stocker.analysis.dto.HighVolumeRequest;
-import com.joakimcolloz.stocker.analysis.dto.PatternInfo;
-import com.joakimcolloz.stocker.analysis.dto.PatternMatch;
-import com.joakimcolloz.stocker.analysis.dto.ScanRequest;
-import com.joakimcolloz.stocker.analysis.dto.ScanResponse;
+import com.joakimcolloz.stocker.analysis.dto.pattern.PatternInfo;
+import com.joakimcolloz.stocker.analysis.dto.pattern.PatternMatch;
+import com.joakimcolloz.stocker.analysis.dto.request.HighVolumeRequest;
+import com.joakimcolloz.stocker.analysis.dto.request.ScanRequest;
+import com.joakimcolloz.stocker.analysis.dto.response.ScanResponse;
+import com.joakimcolloz.stocker.analysis.dto.statistics.AverageVolumeStatistic;
+import com.joakimcolloz.stocker.analysis.dto.statistics.HighVolumeCandlestick;
 import com.joakimcolloz.stocker.analysis.pattern.PatternType;
 import com.joakimcolloz.stocker.analysis.service.AnalysisService;
 

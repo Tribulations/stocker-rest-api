@@ -1,28 +1,22 @@
-package com.joakimcolloz.stocker.analysis.dto;
+package com.joakimcolloz.stocker.analysis.dto.request;
 
+import com.joakimcolloz.stocker.analysis.dto.filter.FilterRequest;
 import com.joakimcolloz.stocker.analysis.validation.TimeRangeRequest;
 import com.joakimcolloz.stocker.analysis.validation.ValidTimeRange;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.Positive;
-import lombok.AllArgsConstructor;
 import lombok.Data;
-import lombok.NoArgsConstructor;
 
-import java.util.Set;
+import java.util.List;
 
 /**
- * Request payload for pattern scanning.
- *
- * @author Joakim Colloz
- * @version 1.0
+ * Request payload for combined filter scanning.
  */
 @Data
-@NoArgsConstructor
-@AllArgsConstructor
 @ValidTimeRange
-public class ScanRequest implements TimeRangeRequest {
+public class CombinedScanRequest implements TimeRangeRequest {
 	@NotEmpty
-	private Set<String> patterns;
+	private List<FilterRequest> filters;
 
 	@Positive
 	private long startTimestamp;

@@ -2,9 +2,9 @@ package com.joakimcolloz.stocker.analysis.service;
 
 import com.joakimcolloz.stocker.api.dao.CandlestickRepository;
 import com.joakimcolloz.stocker.api.entity.Candlestick;
-import com.joakimcolloz.stocker.analysis.dto.CombinedScanRequest;
-import com.joakimcolloz.stocker.analysis.dto.FilterMatch;
-import com.joakimcolloz.stocker.analysis.dto.FilterRequest;
+import com.joakimcolloz.stocker.analysis.dto.filter.FilterMatch;
+import com.joakimcolloz.stocker.analysis.dto.filter.FilterRequest;
+import com.joakimcolloz.stocker.analysis.dto.request.CombinedScanRequest;
 import com.joakimcolloz.stocker.analysis.filter.FilterRegistry;
 import com.joakimcolloz.stocker.analysis.filter.FilterStrategy;
 import org.springframework.stereotype.Service;

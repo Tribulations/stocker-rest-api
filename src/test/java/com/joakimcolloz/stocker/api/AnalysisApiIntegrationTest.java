@@ -2,10 +2,10 @@ package com.joakimcolloz.stocker.api;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
-import com.joakimcolloz.stocker.analysis.dto.HighVolumeCandlestick;
-import com.joakimcolloz.stocker.analysis.dto.HighVolumeRequest;
-import com.joakimcolloz.stocker.analysis.dto.ScanRequest;
-import com.joakimcolloz.stocker.analysis.dto.ScanResponse;
+import com.joakimcolloz.stocker.analysis.dto.request.HighVolumeRequest;
+import com.joakimcolloz.stocker.analysis.dto.request.ScanRequest;
+import com.joakimcolloz.stocker.analysis.dto.response.ScanResponse;
+import com.joakimcolloz.stocker.analysis.dto.statistics.HighVolumeCandlestick;
 import com.joakimcolloz.stocker.api.dao.CandlestickRepository;
 
 import org.junit.jupiter.api.BeforeEach;

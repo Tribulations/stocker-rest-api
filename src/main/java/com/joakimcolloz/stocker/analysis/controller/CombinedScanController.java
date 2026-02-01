@@ -1,7 +1,7 @@
 package com.joakimcolloz.stocker.analysis.controller;
 
-import com.joakimcolloz.stocker.analysis.dto.CombinedScanRequest;
-import com.joakimcolloz.stocker.analysis.dto.FilterMatch;
+import com.joakimcolloz.stocker.analysis.dto.filter.FilterMatch;
+import com.joakimcolloz.stocker.analysis.dto.request.CombinedScanRequest;
 import com.joakimcolloz.stocker.analysis.service.CombinedScanService;
 import io.swagger.v3.oas.annotations.Operation;
 

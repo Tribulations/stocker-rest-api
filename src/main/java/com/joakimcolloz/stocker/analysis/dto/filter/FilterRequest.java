@@ -1,6 +1,6 @@
 // File: src/main/java/com/joakimcolloz/stocker/analysis/dto/FilterRequest.java
 
-package com.joakimcolloz.stocker.analysis.dto;
+package com.joakimcolloz.stocker.analysis.dto.filter;
 
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import lombok.AllArgsConstructor;

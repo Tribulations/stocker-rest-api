@@ -1,10 +1,10 @@
 package com.joakimcolloz.stocker.analysis.service;
 
-import com.joakimcolloz.stocker.analysis.dto.AverageVolumeStatistic;
-import com.joakimcolloz.stocker.analysis.dto.HighVolumeCandlestick;
-import com.joakimcolloz.stocker.analysis.dto.HighVolumeRequest;
-import com.joakimcolloz.stocker.analysis.dto.PatternMatch;
-import com.joakimcolloz.stocker.analysis.dto.ScanRequest;
+import com.joakimcolloz.stocker.analysis.dto.request.ScanRequest;
+import com.joakimcolloz.stocker.analysis.dto.request.HighVolumeRequest;
+import com.joakimcolloz.stocker.analysis.dto.pattern.PatternMatch;
+import com.joakimcolloz.stocker.analysis.dto.statistics.AverageVolumeStatistic;
+import com.joakimcolloz.stocker.analysis.dto.statistics.HighVolumeCandlestick;
 import com.joakimcolloz.stocker.analysis.pattern.PatternRegistry;
 import com.joakimcolloz.stocker.api.dao.CandlestickRepository;
 import com.joakimcolloz.stocker.api.entity.Candlestick;

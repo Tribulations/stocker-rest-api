@@ -1,4 +1,4 @@
-package com.joakimcolloz.stocker.analysis.dto;
+package com.joakimcolloz.stocker.analysis.dto.request;
 
 import com.joakimcolloz.stocker.analysis.validation.TimeRangeRequest;
 import com.joakimcolloz.stocker.analysis.validation.ValidTimeRange;

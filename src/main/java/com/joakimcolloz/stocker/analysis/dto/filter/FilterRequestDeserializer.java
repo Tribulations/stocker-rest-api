@@ -1,4 +1,4 @@
-package com.joakimcolloz.stocker.analysis.dto;
+package com.joakimcolloz.stocker.analysis.dto.filter;
 
 import com.fasterxml.jackson.core.JacksonException;
 import com.fasterxml.jackson.core.JsonParser;

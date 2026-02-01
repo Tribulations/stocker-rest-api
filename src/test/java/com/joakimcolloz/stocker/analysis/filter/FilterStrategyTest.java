@@ -2,9 +2,9 @@ package com.joakimcolloz.stocker.analysis.filter;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.joakimcolloz.stocker.api.entity.Candlestick;
-import com.joakimcolloz.stocker.analysis.dto.HighVolumeFilterParams;
-import com.joakimcolloz.stocker.analysis.dto.FilterMatch;
-import com.joakimcolloz.stocker.analysis.dto.RsiFilterParams;
+import com.joakimcolloz.stocker.analysis.dto.filter.FilterMatch;
+import com.joakimcolloz.stocker.analysis.dto.filter.HighVolumeFilterParams;
+import com.joakimcolloz.stocker.analysis.dto.filter.RsiFilterParams;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

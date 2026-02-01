@@ -1,9 +1,9 @@
 package com.joakimcolloz.stocker.analysis.filter;
 
 import com.joakimcolloz.stocker.api.entity.Candlestick;
-import com.joakimcolloz.stocker.analysis.dto.FilterParams;
-import com.joakimcolloz.stocker.analysis.dto.FilterMatch;
-import com.joakimcolloz.stocker.analysis.dto.HighVolumeFilterParams;
+import com.joakimcolloz.stocker.analysis.dto.filter.FilterMatch;
+import com.joakimcolloz.stocker.analysis.dto.filter.FilterParams;
+import com.joakimcolloz.stocker.analysis.dto.filter.HighVolumeFilterParams;
 
 import java.util.ArrayList;
 import java.util.List;
