@@ -69,7 +69,7 @@ public abstract class FilterStrategy {
         for (Candlestick candle : sortedCandles) {
             Instant instant = Instant.ofEpochSecond(candle.getTimestamp());
 
-            log.info("Converting candlestick {} to BaseBar", candle);
+            log.debug("Converting candlestick {} to BaseBar", candle);
 
 
             // Create BaseBar
