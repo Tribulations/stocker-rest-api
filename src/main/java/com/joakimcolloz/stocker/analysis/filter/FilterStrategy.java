@@ -1,8 +1,8 @@
 package com.joakimcolloz.stocker.analysis.filter;
 
 import com.joakimcolloz.stocker.api.entity.Candlestick;
+import com.joakimcolloz.stocker.analysis.dto.FilterParams;
 import com.joakimcolloz.stocker.analysis.dto.FilterMatch;
-import com.fasterxml.jackson.databind.JsonNode;
 import lombok.extern.slf4j.Slf4j;
 import org.ta4j.core.BarSeries;
 import org.ta4j.core.BaseBar;
@@ -41,7 +41,7 @@ public abstract class FilterStrategy {
     public abstract List<FilterMatch> apply(
             List<Candlestick> filteredData,
             List<Candlestick> fullData,
-            JsonNode params
+            FilterParams params
     );
 
     /**

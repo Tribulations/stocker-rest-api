@@ -3,6 +3,8 @@ package com.joakimcolloz.stocker.analysis;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.joakimcolloz.stocker.analysis.dto.CombinedScanRequest;
 import com.joakimcolloz.stocker.analysis.dto.FilterRequest;
+import com.joakimcolloz.stocker.analysis.dto.HighVolumeFilterParams;
+import com.joakimcolloz.stocker.analysis.dto.RsiFilterParams;
 import com.joakimcolloz.stocker.api.dao.CandlestickRepository;
 import com.joakimcolloz.stocker.api.entity.Candlestick;
 import org.junit.jupiter.api.BeforeEach;
@@ -458,16 +460,14 @@ public class CombinedScanIntegrationTest {
     private FilterRequest createHighVolumeFilter(int percentageAbove) {
         FilterRequest filter = new FilterRequest();
         filter.setType("HIGH_VOLUME");
-        filter.setParams(objectMapper.createObjectNode().put("percentageAbove", percentageAbove));
+        filter.setParams(new HighVolumeFilterParams(percentageAbove));
         return filter;
     }
 
     private FilterRequest createRSIFilter(double threshold, String condition) {
         FilterRequest filter = new FilterRequest();
         filter.setType("RSI");
-        filter.setParams(objectMapper.createObjectNode()
-                .put("threshold", threshold)
-                .put("condition", condition));
+        filter.setParams(new RsiFilterParams(threshold, condition));
         return filter;
     }
 }

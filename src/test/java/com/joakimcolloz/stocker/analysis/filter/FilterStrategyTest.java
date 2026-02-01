@@ -2,7 +2,9 @@ package com.joakimcolloz.stocker.analysis.filter;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.joakimcolloz.stocker.api.entity.Candlestick;
+import com.joakimcolloz.stocker.analysis.dto.HighVolumeFilterParams;
 import com.joakimcolloz.stocker.analysis.dto.FilterMatch;
+import com.joakimcolloz.stocker.analysis.dto.RsiFilterParams;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -60,9 +62,7 @@ class FilterStrategyTest {
     @DisplayName("HighVolumeFilter should identify candlesticks above threshold")
     void testHighVolumeFilterApply() {
         HighVolumeFilter filter = new HighVolumeFilter();
-
-        var params = objectMapper.createObjectNode().put("percentageAbove", 50);
-        List<FilterMatch> matches = filter.apply(testData, testData, params);
+        List<FilterMatch> matches = filter.apply(testData, testData, new HighVolumeFilterParams(50));
 
         // Should find candlesticks with volume significantly above average
         // Change assertion - matches might be empty if no candles exceed threshold
@@ -79,9 +79,7 @@ class FilterStrategyTest {
     @DisplayName("HighVolumeFilter with very high threshold should return no matches")
     void testHighVolumeFilterHighThreshold() {
         HighVolumeFilter filter = new HighVolumeFilter();
-
-        var params = objectMapper.createObjectNode().put("percentageAbove", 500);
-        List<FilterMatch> matches = filter.apply(testData, testData, params);
+        List<FilterMatch> matches = filter.apply(testData, testData, new HighVolumeFilterParams(500));
 
         assertTrue(matches.isEmpty());
     }
@@ -113,11 +111,7 @@ class FilterStrategyTest {
             trendingData.add(c);
         }
 
-        var params = objectMapper.createObjectNode()
-                .put("threshold", 50.0)
-                .put("condition", "above");
-
-        List<FilterMatch> matches = filter.apply(trendingData, trendingData, params);
+        List<FilterMatch> matches = filter.apply(trendingData, trendingData, new RsiFilterParams(50.0, "above"));
 
         // Should find some matches with RSI above 50
         // (exact count depends on RSI calculation)
@@ -147,11 +141,7 @@ class FilterStrategyTest {
             decliningData.add(c);
         }
 
-        var params = objectMapper.createObjectNode()
-                .put("threshold", 50.0)
-                .put("condition", "below");
-
-        List<FilterMatch> matches = filter.apply(decliningData, decliningData, params);
+        List<FilterMatch> matches = filter.apply(decliningData, decliningData, new RsiFilterParams(50.0, "below"));
 
         // Should find matches with RSI below 50
         for (FilterMatch match : matches) {
