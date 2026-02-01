@@ -45,4 +45,9 @@ public class RestExceptionHandler {
 		// TODO; Change this later: Intentionally return an empty-body 400 to preserve previous controller behavior.
 		return ResponseEntity.badRequest().build();
 	}
+
+	@ExceptionHandler(IllegalArgumentException.class)
+	public ResponseEntity<Void> handleIllegalArgumentException(IllegalArgumentException ex) {
+		return ResponseEntity.badRequest().build();
+	}
 }

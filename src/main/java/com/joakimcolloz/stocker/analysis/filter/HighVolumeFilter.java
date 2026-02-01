@@ -27,7 +27,13 @@ public class HighVolumeFilter extends FilterStrategy {
             List<Candlestick> fullData,
             FilterParams params
     ) {
-        HighVolumeFilterParams hvParams = (HighVolumeFilterParams) params;
+        if (!(params instanceof HighVolumeFilterParams hvParams)) {
+            throw new IllegalArgumentException("Invalid parameters for HIGH_VOLUME filter");
+        }
+        if (hvParams.getPercentageAbove() == null) {
+            throw new IllegalArgumentException("Missing parameters for HIGH_VOLUME filter");
+        }
+
         int percentageAbove = hvParams.getPercentageAbove();
 
         // Group by symbol

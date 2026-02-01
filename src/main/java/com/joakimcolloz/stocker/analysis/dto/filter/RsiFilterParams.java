@@ -8,6 +8,6 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class RsiFilterParams implements FilterParams {
-	private double threshold;
+	private Double threshold;
 	private String condition;
 }

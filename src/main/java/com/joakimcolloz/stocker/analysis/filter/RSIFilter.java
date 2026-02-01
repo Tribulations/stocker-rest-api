@@ -35,7 +35,14 @@ public class RSIFilter extends FilterStrategy {
             FilterParams params // TODO: add RSI period as parameter
     ) {
         // TODO: use contants/enum for conditions and parameters
-        RsiFilterParams rsiParams = (RsiFilterParams) params;
+        if (!(params instanceof RsiFilterParams rsiParams)) {
+            throw new IllegalArgumentException("Invalid parameters for RSI filter");
+        }
+
+        if (rsiParams.getThreshold() == null || rsiParams.getCondition() == null) {
+            throw new IllegalArgumentException("Missing parameters for RSI filter");
+        }
+
         double threshold = rsiParams.getThreshold();
         String condition = rsiParams.getCondition();  // "above" or "below"
 

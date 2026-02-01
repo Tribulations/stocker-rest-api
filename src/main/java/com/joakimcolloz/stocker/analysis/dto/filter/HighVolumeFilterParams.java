@@ -8,5 +8,5 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class HighVolumeFilterParams implements FilterParams {
-	private int percentageAbove;
+	private Integer percentageAbove;
 }
