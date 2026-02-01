@@ -10,7 +10,9 @@ import com.joakimcolloz.stocker.analysis.filter.FilterStrategy;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Service for executing combined filter scans.
@@ -60,7 +62,7 @@ public class CombinedScanService {
             }
 
             // Update current results to be only the matches from this filter
-            currentResults = convertMatchesToCandlesticks(filterMatches);
+            currentResults = resolveMatchedCandlesticks(filterMatches, currentResults, fullData);
             matches = filterMatches;  // Keep track of enriched matches
 
             // If no matches, short-circuit
@@ -73,21 +75,40 @@ public class CombinedScanService {
     }
 
     /**
-     * Converts FilterMatch objects back to Candlestick entities for next filter.
+     * Resolves the matched candlesticks back to the already-loaded entities.
+     * <p>
+     * This avoids creating new Candlestick instances between filters.
      */
-    private List<Candlestick> convertMatchesToCandlesticks(List<FilterMatch> matches) {
-        List<Candlestick> candlesticks = new ArrayList<>();
+    private List<Candlestick> resolveMatchedCandlesticks(
+            List<FilterMatch> matches,
+            List<Candlestick> currentResults,
+            List<Candlestick> fullData
+    ) {
+        Map<CandlestickKey, Candlestick> currentLookup = indexByKey(currentResults);
+        Map<CandlestickKey, Candlestick> fullLookup = indexByKey(fullData);
+
+        List<Candlestick> resolved = new ArrayList<>();
         for (FilterMatch match : matches) {
-            Candlestick c = new Candlestick();
-            c.setSymbol(match.getSymbol());
-            c.setTimestamp(match.getTimestamp());
-            c.setOpen(match.getOpen());
-            c.setHigh(match.getHigh());
-            c.setLow(match.getLow());
-            c.setClose(match.getClose());
-            c.setVolume(match.getVolume());
-            candlesticks.add(c);
+            CandlestickKey key = new CandlestickKey(match.getSymbol(), match.getTimestamp());
+            Candlestick candle = currentLookup.get(key);
+            if (candle == null) {
+                candle = fullLookup.get(key);
+            }
+            if (candle != null) {
+                resolved.add(candle);
+            }
         }
-        return candlesticks;
+        return resolved;
+    }
+
+    private Map<CandlestickKey, Candlestick> indexByKey(List<Candlestick> candlesticks) {
+        Map<CandlestickKey, Candlestick> index = new HashMap<>();
+        for (Candlestick candle : candlesticks) {
+            index.put(new CandlestickKey(candle.getSymbol(), candle.getTimestamp()), candle);
+        }
+        return index;
+    }
+
+    private record CandlestickKey(String symbol, long timestamp) {
     }
 }
