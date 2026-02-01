@@ -218,8 +218,9 @@ public class CombinedScanIntegrationTest {
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$", hasSize(greaterThan(0))))
                     .andExpect(jsonPath("$[0].symbol").exists())
-                    .andExpect(jsonPath("$[0].filterType").value("HIGH_VOLUME"))
-                    .andExpect(jsonPath("$[0].description").exists());
+                    .andExpect(jsonPath("$[0].filters", hasSize(1)))
+                    .andExpect(jsonPath("$[0].filters[0].filterType").value("HIGH_VOLUME"))
+                    .andExpect(jsonPath("$[0].filters[0].description").exists());
         }
 
         @Test

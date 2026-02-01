@@ -5,6 +5,8 @@ import com.joakimcolloz.stocker.api.entity.Candlestick;
 import com.joakimcolloz.stocker.analysis.dto.filter.FilterMatch;
 import com.joakimcolloz.stocker.analysis.dto.filter.FilterRequest;
 import com.joakimcolloz.stocker.analysis.dto.request.CombinedScanRequest;
+import com.joakimcolloz.stocker.analysis.dto.response.CombinedFilterResult;
+import com.joakimcolloz.stocker.analysis.dto.response.FilterEvidence;
 import com.joakimcolloz.stocker.analysis.filter.FilterRegistry;
 import com.joakimcolloz.stocker.analysis.filter.FilterStrategy;
 import org.springframework.stereotype.Service;
@@ -34,7 +36,7 @@ public class CombinedScanService {
      * @param request The scan request with filters and time range
      * @return List of candlesticks matching all filter criteria
      */
-    public List<FilterMatch> executeScan(CombinedScanRequest request) {
+    public List<CombinedFilterResult> executeScan(CombinedScanRequest request) {
         // Fetch full dataset once (single DB query)
         List<Candlestick> fullData = candlestickRepository
                 .findByTimestampBetween(request.getStartTimestamp(), request.getEndTimestamp());
@@ -45,7 +47,8 @@ public class CombinedScanService {
 
         // Start with full data as initial results
         List<Candlestick> currentResults = new ArrayList<>(fullData);
-        List<FilterMatch> matches = new ArrayList<>();
+        Map<CandlestickKey, Candlestick> fullDataLookup = indexByKey(fullData);
+        Map<CandlestickKey, CombinedFilterResult> accumulatedResults = new HashMap<>();
 
         // Apply each filter sequentially
         for (FilterRequest filterRequest : request.getFilters()) {
@@ -61,9 +64,34 @@ public class CombinedScanService {
                 filterMatches = filter.apply(currentResults, currentResults, filterRequest.getParams());
             }
 
+            Map<CandlestickKey, CombinedFilterResult> nextAccumulatedResults = new HashMap<>();
+            for (FilterMatch match : filterMatches) {
+                CandlestickKey key = new CandlestickKey(match.getSymbol(), match.getTimestamp());
+                CombinedFilterResult result = accumulatedResults.get(key);
+                if (result == null) {
+                    Candlestick candle = fullDataLookup.get(key);
+                    if (candle == null) {
+                        continue;
+                    }
+                    result = new CombinedFilterResult(
+                            candle.getSymbol(),
+                            candle.getTimestamp(),
+                            candle.getOpen(),
+                            candle.getHigh(),
+                            candle.getLow(),
+                            candle.getClose(),
+                            candle.getVolume(),
+                            new ArrayList<>()
+                    );
+                }
+
+                result.getFilters().add(new FilterEvidence(match.getFilterType(), match.getDescription()));
+                nextAccumulatedResults.put(key, result);
+            }
+
             // Update current results to be only the matches from this filter
             currentResults = resolveMatchedCandlesticks(filterMatches, currentResults, fullData);
-            matches = filterMatches;  // Keep track of enriched matches
+            accumulatedResults = nextAccumulatedResults;
 
             // If no matches, short-circuit
             if (currentResults.isEmpty()) {
@@ -71,7 +99,15 @@ public class CombinedScanService {
             }
         }
 
-        return matches;
+        List<CombinedFilterResult> orderedResults = new ArrayList<>();
+        for (Candlestick candle : currentResults) {
+            CombinedFilterResult result = accumulatedResults.get(new CandlestickKey(candle.getSymbol(), candle.getTimestamp()));
+            if (result != null) {
+                orderedResults.add(result);
+            }
+        }
+
+        return orderedResults;
     }
 
     /**

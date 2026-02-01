@@ -1,7 +1,7 @@
 package com.joakimcolloz.stocker.analysis.controller;
 
-import com.joakimcolloz.stocker.analysis.dto.filter.FilterMatch;
 import com.joakimcolloz.stocker.analysis.dto.request.CombinedScanRequest;
+import com.joakimcolloz.stocker.analysis.dto.response.CombinedFilterResult;
 import com.joakimcolloz.stocker.analysis.service.CombinedScanService;
 import io.swagger.v3.oas.annotations.Operation;
 
@@ -30,8 +30,8 @@ public class CombinedScanController {
     @PostMapping("/combined-scan")
     @Operation(summary = "Execute combined filter scan",
             description = "Applies multiple filters sequentially to find candlesticks matching all criteria")
-    public ResponseEntity<List<FilterMatch>> combinedScan(@Valid @RequestBody CombinedScanRequest request) {
-        List<FilterMatch> results = combinedScanService.executeScan(request);
+    public ResponseEntity<List<CombinedFilterResult>> combinedScan(@Valid @RequestBody CombinedScanRequest request) {
+        List<CombinedFilterResult> results = combinedScanService.executeScan(request);
         return ResponseEntity.ok(results);
     }
 }
