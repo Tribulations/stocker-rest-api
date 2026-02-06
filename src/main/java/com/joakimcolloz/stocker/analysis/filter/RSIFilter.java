@@ -1,12 +1,10 @@
 package com.joakimcolloz.stocker.analysis.filter;
 
 import com.joakimcolloz.stocker.api.entity.Candlestick;
+import com.joakimcolloz.stocker.analysis.indicator.RsiCalculator;
 import com.joakimcolloz.stocker.analysis.dto.filter.FilterMatch;
 import com.joakimcolloz.stocker.analysis.dto.filter.FilterParams;
 import com.joakimcolloz.stocker.analysis.dto.filter.RsiFilterParams;
-import org.ta4j.core.BarSeries;
-import org.ta4j.core.indicators.RSIIndicator;
-import org.ta4j.core.indicators.helpers.ClosePriceIndicator;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -70,29 +68,20 @@ public class RSIFilter extends FilterStrategy {
                     .sorted(Comparator.comparingLong(Candlestick::getTimestamp))
                     .toList();
 
-            // Convert to BarSeries
-            BarSeries series = convertToBarSeries(sortedSymbolData, symbol);
-
-            if (series.getBarCount() < DEFAULT_RSI_PERIOD + 1) {
+            Map<Long, Double> rsiByTimestamp = RsiCalculator.calculateRsiByTimestamp(sortedSymbolData, DEFAULT_RSI_PERIOD);
+            if (rsiByTimestamp.isEmpty()) {
                 continue;
             }
-
-            // Calculate RSI
-            ClosePriceIndicator closePrice = new ClosePriceIndicator(series);
-            RSIIndicator rsi = new RSIIndicator(closePrice, DEFAULT_RSI_PERIOD);
 
             // Check filtered data against RSI values
             for (Candlestick candle : symbolFilteredData) {
 
                 // Find index of this candlestick in the series
-                int index = findCandlestickIndex(sortedSymbolData, candle);
-                if (index == -1 || index >= series.getBarCount()) continue;
-
-                double rsiValue = rsi.getValue(index).doubleValue();
-
-                if (index < DEFAULT_RSI_PERIOD || Double.isNaN(rsiValue) || rsiValue == 0 || rsiValue == 100) {
+                Double rsiValueObj = rsiByTimestamp.get(candle.getTimestamp());
+                if (rsiValueObj == null) {
                     continue;
                 }
+                double rsiValue = rsiValueObj;
 
                 boolean matches_condition = condition.equals("above")
                         ? rsiValue > threshold
@@ -108,7 +97,13 @@ public class RSIFilter extends FilterStrategy {
                             candle.getClose(),
                             candle.getVolume(),
                             "RSI",
-                            String.format("RSI %.2f %s %.2f", rsiValue, condition, threshold)
+                            String.format("RSI %.2f %s %.2f", rsiValue, condition, threshold),
+                            Map.of("rsi", rsiValue),
+                            Map.of(
+                                    "period", Integer.toString(DEFAULT_RSI_PERIOD),
+                                    "threshold", Double.toString(threshold),
+                                    "condition", condition
+                            )
                     ));
                 }
             }
@@ -117,16 +112,4 @@ public class RSIFilter extends FilterStrategy {
         return matches;
     }
 
-    /**
-     * Finds the index of a candlestick in a list by timestamp.
-     */
-    private int findCandlestickIndex(List<Candlestick> list, Candlestick target) {
-        for (int i = 0; i < list.size(); i++) {
-            if (list.get(i).getTimestamp() == target.getTimestamp()
-                    && list.get(i).getSymbol().equals(target.getSymbol())) {
-                return i;
-            }
-        }
-        return -1;
-    }
 }

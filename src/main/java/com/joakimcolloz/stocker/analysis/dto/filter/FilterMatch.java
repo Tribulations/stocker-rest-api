@@ -3,6 +3,8 @@ package com.joakimcolloz.stocker.analysis.dto.filter;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 
+import java.util.Map;
+
 /**
  * Represents a candlestick that matches filter criteria.
  */
@@ -18,4 +20,6 @@ public class FilterMatch {
     private long volume;
     private String filterType;  // Which filter matched this
     private String description;  // Human-readable description
+	private Map<String, Double> values;
+	private Map<String, String> params;
 }

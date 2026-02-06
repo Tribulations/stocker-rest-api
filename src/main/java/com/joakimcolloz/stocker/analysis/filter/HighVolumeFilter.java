@@ -66,7 +66,15 @@ public class HighVolumeFilter extends FilterStrategy {
                             candle.getClose(),
                             candle.getVolume(),
                             "HIGH_VOLUME",
-                            String.format("Volume %d%% above average", actualPercentage)
+                            String.format("Volume %d%% above average", actualPercentage),
+                            Map.of(
+                                    "percentageAboveAverage", (double) actualPercentage,
+                                    "averageVolume", (double) averageVolume,
+                                    "thresholdVolume", (double) threshold
+                            ),
+                            Map.of(
+                                    "percentageAbove", Integer.toString(percentageAbove)
+                            )
                     ));
                 }
             }
