@@ -85,7 +85,7 @@ public class CombinedScanService {
                     );
                 }
 
-                result.getFilters().add(new FilterEvidence(match.getFilterType(), match.getDescription()));
+                result.getFilters().add(new FilterEvidence(match.getFilterType(), match.getDescription(), match.getValues(), match.getParams()));
                 nextAccumulatedResults.put(key, result);
             }
 
