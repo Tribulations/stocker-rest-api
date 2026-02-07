@@ -12,6 +12,14 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * Service that produces stable RSI time-series data for a given symbol.
+ * <p>
+ * "Stable" means the lookback window is extended beyond the requested range so that
+ * the initial RSI values have converged and are not distorted by insufficient history.
+ *
+ * @see RsiCalculator
+ */
 @Service
 public class RsiIndicatorService {
 	private final CandlestickRepository candlestickRepository;
@@ -20,6 +28,21 @@ public class RsiIndicatorService {
 		this.candlestickRepository = candlestickRepository;
 	}
 
+	/**
+	 * Computes a stable RSI series for the requested window.
+	 * <p>
+	 * Fetches extra candlesticks before {@code startTimestamp} (determined by
+	 * {@link RsiCalculator#lookbackSecondsForStableRsi}) so the returned RSI values
+	 * are fully converged. Only data points within [{@code startTimestamp}, {@code endTimestamp}]
+	 * are included in the response.
+	 *
+	 * @param symbol         ticker symbol
+	 * @param startTimestamp epoch-second start of the visible range
+	 * @param endTimestamp   epoch-second end of the visible range
+	 * @param period         RSI period (must be positive)
+	 * @return response containing the RSI data points
+	 * @throws IllegalArgumentException if parameters are invalid or data is insufficient
+	 */
 	public RsiSeriesResponse getStableRsiSeries(String symbol, long startTimestamp, long endTimestamp, int period) {
 		if (symbol == null || symbol.isBlank()) {
 			throw new IllegalArgumentException("Symbol is required");
