@@ -111,6 +111,14 @@ public class CombinedScanService {
             }
         }
 
+        if (request.getResultLastDays() != null) {
+            long cutoff = request.getEndTimestamp() - (request.getResultLastDays() * 86_400L);
+            long effectiveCutoff = Math.max(cutoff, request.getStartTimestamp());
+            orderedResults = orderedResults.stream()
+                    .filter(r -> r.getTimestamp() >= effectiveCutoff)
+                    .toList();
+        }
+
         return orderedResults;
     }
 
