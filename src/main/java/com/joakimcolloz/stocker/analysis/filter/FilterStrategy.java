@@ -31,6 +31,18 @@ public abstract class FilterStrategy {
     public abstract boolean needsFullTimeSeries();
 
     /**
+     * Returns the number of seconds of extra history needed before the visible window
+     * so that the filter's indicator has time to converge.
+     * <p>
+     * The default is 0 (no lookback). Time-series filters should override this.
+     *
+     * @return lookback duration in seconds
+     */
+    public long lookbackSeconds() {
+        return 0L;
+    }
+
+    /**
      * Applies the filter to the data.
      *
      * @param filteredData The current filtered results (from previous filters)

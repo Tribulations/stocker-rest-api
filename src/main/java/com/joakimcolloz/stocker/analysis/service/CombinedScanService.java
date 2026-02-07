@@ -15,6 +15,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * Service for executing combined filter scans.
@@ -41,16 +42,28 @@ public class CombinedScanService {
      * @return List of candlesticks matching all filter criteria
      */
     public List<CombinedFilterResult> executeScan(CombinedScanRequest request) {
-        // Fetch full dataset once (single DB query)
+        // Compute the max lookback across all requested filters
+        long maxLookback = 0L;
+        for (FilterRequest filterRequest : request.getFilters()) {
+            FilterStrategy filter = filterRegistry.getFilter(filterRequest.getType());
+            maxLookback = Math.max(maxLookback, filter.lookbackSeconds());
+        }
+
+        // Extend start timestamp to include lookback data for time-series filters
+        long extendedStart = Math.max(1L, request.getStartTimestamp() - maxLookback);
+
+        // Fetch full dataset once (single DB query), including lookback period
         List<Candlestick> fullData = candlestickRepository
-                .findByTimestampBetween(request.getStartTimestamp(), request.getEndTimestamp());
+                .findByTimestampBetween(extendedStart, request.getEndTimestamp());
 
         if (fullData.isEmpty()) {
             return new ArrayList<>();
         }
 
-        // Start with full data as initial results
-        List<Candlestick> currentResults = new ArrayList<>(fullData);
+        // Start with only candlesticks in the original visible range as initial results
+        List<Candlestick> currentResults = fullData.stream()
+                .filter(c -> c.getTimestamp() >= request.getStartTimestamp())
+                .collect(Collectors.toList());
         Map<CandlestickKey, Candlestick> fullDataLookup = indexByKey(fullData);
         Map<CandlestickKey, CombinedFilterResult> accumulatedResults = new HashMap<>();
 

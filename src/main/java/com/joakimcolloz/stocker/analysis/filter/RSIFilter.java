@@ -27,6 +27,11 @@ public class RSIFilter extends FilterStrategy {
     }
 
     @Override
+    public long lookbackSeconds() {
+        return RsiCalculator.lookbackSecondsForStableRsi(DEFAULT_RSI_PERIOD);
+    }
+
+    @Override
     public List<FilterMatch> apply(
             List<Candlestick> filteredData,
             List<Candlestick> fullData,
@@ -68,7 +73,7 @@ public class RSIFilter extends FilterStrategy {
                     .sorted(Comparator.comparingLong(Candlestick::getTimestamp))
                     .toList();
 
-            Map<Long, Double> rsiByTimestamp = RsiCalculator.calculateRsiByTimestamp(sortedSymbolData, DEFAULT_RSI_PERIOD);
+            Map<Long, Double> rsiByTimestamp = RsiCalculator.calculateStableRsiByTimestamp(sortedSymbolData, DEFAULT_RSI_PERIOD);
             if (rsiByTimestamp.isEmpty()) {
                 continue;
             }
