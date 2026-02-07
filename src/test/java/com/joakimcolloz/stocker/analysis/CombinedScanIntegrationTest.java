@@ -457,6 +457,80 @@ public class CombinedScanIntegrationTest {
         }
     }
 
+    @Nested
+    @DisplayName("Result Last Days Filter Tests")
+    class ResultLastDaysTests {
+
+        @Test
+        @DisplayName("Should trim results to last N days when resultLastDays is set")
+        void testResultLastDaysTrimsOlderResults() throws Exception {
+            // The HIGH_VOLUME match is on day 15 (2024-01-16 09:00:00).
+            // endTimestamp is 2024-01-20 23:59:59.
+            // resultLastDays=3 → cutoff ≈ 2024-01-17 23:59:59 → day-15 match is excluded.
+            CombinedScanRequest request = new CombinedScanRequest();
+            request.setFilters(List.of(createHighVolumeFilter(50)));
+            request.setStartTimestamp(humanReadableToTimestamp("2024-01-01 00:00:00"));
+            request.setEndTimestamp(humanReadableToTimestamp("2024-01-20 23:59:59"));
+            request.setResultLastDays(3);
+
+            mockMvc.perform(post("/api/analysis/combined-scan")
+                            .header("X-API-Key", "test-api-key")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(objectMapper.writeValueAsString(request)))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$", hasSize(0)));
+        }
+
+        @Test
+        @DisplayName("Should return full results when resultLastDays is omitted")
+        void testNoResultLastDaysReturnsAll() throws Exception {
+            CombinedScanRequest request = new CombinedScanRequest();
+            request.setFilters(List.of(createHighVolumeFilter(50)));
+            request.setStartTimestamp(humanReadableToTimestamp("2024-01-01 00:00:00"));
+            request.setEndTimestamp(humanReadableToTimestamp("2024-01-20 23:59:59"));
+            // resultLastDays intentionally not set
+
+            mockMvc.perform(post("/api/analysis/combined-scan")
+                            .header("X-API-Key", "test-api-key")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(objectMapper.writeValueAsString(request)))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$", hasSize(greaterThan(0))));
+        }
+
+        @Test
+        @DisplayName("Should return 400 when resultLastDays is zero")
+        void testResultLastDaysZero() throws Exception {
+            CombinedScanRequest request = new CombinedScanRequest();
+            request.setFilters(List.of(createHighVolumeFilter(50)));
+            request.setStartTimestamp(humanReadableToTimestamp("2024-01-01 00:00:00"));
+            request.setEndTimestamp(humanReadableToTimestamp("2024-01-20 23:59:59"));
+            request.setResultLastDays(0);
+
+            mockMvc.perform(post("/api/analysis/combined-scan")
+                            .header("X-API-Key", "test-api-key")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(objectMapper.writeValueAsString(request)))
+                    .andExpect(status().isBadRequest());
+        }
+
+        @Test
+        @DisplayName("Should return 400 when resultLastDays is negative")
+        void testResultLastDaysNegative() throws Exception {
+            CombinedScanRequest request = new CombinedScanRequest();
+            request.setFilters(List.of(createHighVolumeFilter(50)));
+            request.setStartTimestamp(humanReadableToTimestamp("2024-01-01 00:00:00"));
+            request.setEndTimestamp(humanReadableToTimestamp("2024-01-20 23:59:59"));
+            request.setResultLastDays(-5);
+
+            mockMvc.perform(post("/api/analysis/combined-scan")
+                            .header("X-API-Key", "test-api-key")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(objectMapper.writeValueAsString(request)))
+                    .andExpect(status().isBadRequest());
+        }
+    }
+
     // Helper methods to create filter requests
 
     private FilterRequest createHighVolumeFilter(int percentageAbove) {
