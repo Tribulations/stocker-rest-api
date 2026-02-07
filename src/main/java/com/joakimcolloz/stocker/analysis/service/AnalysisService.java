@@ -148,10 +148,21 @@ public class AnalysisService {
         return highVolumeCandlesticks;
     }
 
+    /**
+     * Returns all distinct ticker symbols present in the candlestick repository.
+     */
     public List<String> findAllDistinctSymbols() {
         return candlestickRepository.findAllDistinctSymbols();
     }
 
+    /**
+     * Retrieves candlesticks for the given symbol within the specified time range.
+     *
+     * @param symbol         ticker symbol
+     * @param startTimestamp epoch-second start (inclusive)
+     * @param endTimestamp   epoch-second end (inclusive)
+     * @return matching candlesticks
+     */
     public List<Candlestick> findBySymbolAndTimestampBetween(String symbol, long startTimestamp, long endTimestamp) {
         return candlestickRepository.findBySymbolAndTimestampBetween(symbol, startTimestamp, endTimestamp);
     }

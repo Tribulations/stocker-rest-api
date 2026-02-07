@@ -18,6 +18,10 @@ import java.util.Map;
 
 /**
  * Service for executing combined filter scans.
+ * <p>
+ * Fetches the full candlestick dataset for the requested time range once, then applies
+ * each filter sequentially. Filters narrow the result set progressively (AND semantics),
+ * and per-filter evidence is accumulated on each surviving candlestick.
  */
 @Service
 public class CombinedScanService {

@@ -10,6 +10,12 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+/**
+ * REST controller exposing technical indicator endpoints.
+ * <p>
+ * Provides time-series indicator data (e.g. RSI) for a given symbol and time range.
+ * All endpoints are mapped under {@code /api/analysis/indicators}.
+ */
 @RestController
 @RequestMapping("/api/analysis/indicators")
 @Tag(name = "Indicators", description = "Technical indicator endpoints")
@@ -20,6 +26,15 @@ public class IndicatorsController {
 		this.rsiIndicatorService = rsiIndicatorService;
 	}
 
+	/**
+	 * Returns a stable RSI series for the given symbol and time range.
+	 *
+	 * @param symbol         ticker symbol to query
+	 * @param startTimestamp epoch-second start of the requested range
+	 * @param endTimestamp   epoch-second end of the requested range
+	 * @param period         RSI period (default 14)
+	 * @return RSI data points within the requested window
+	 */
 	@GetMapping("/rsi")
 	@Operation(summary = "Get RSI series", description = "Returns stable RSI values for a symbol within the requested time range")
 	public ResponseEntity<RsiSeriesResponse> getRsiSeries(
