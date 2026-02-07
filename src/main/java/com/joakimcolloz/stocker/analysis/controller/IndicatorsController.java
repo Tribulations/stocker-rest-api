@@ -1,6 +1,8 @@
 package com.joakimcolloz.stocker.analysis.controller;
 
+import com.joakimcolloz.stocker.analysis.dto.response.MacdSeriesResponse;
 import com.joakimcolloz.stocker.analysis.dto.response.RsiSeriesResponse;
+import com.joakimcolloz.stocker.analysis.service.MacdIndicatorService;
 import com.joakimcolloz.stocker.analysis.service.RsiIndicatorService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -21,9 +23,11 @@ import org.springframework.web.bind.annotation.RestController;
 @Tag(name = "Indicators", description = "Technical indicator endpoints")
 public class IndicatorsController {
 	private final RsiIndicatorService rsiIndicatorService;
+	private final MacdIndicatorService macdIndicatorService;
 
-	public IndicatorsController(RsiIndicatorService rsiIndicatorService) {
+	public IndicatorsController(RsiIndicatorService rsiIndicatorService, MacdIndicatorService macdIndicatorService) {
 		this.rsiIndicatorService = rsiIndicatorService;
+		this.macdIndicatorService = macdIndicatorService;
 	}
 
 	/**
@@ -44,5 +48,30 @@ public class IndicatorsController {
 			@RequestParam(defaultValue = "14") int period
 	) {
 		return ResponseEntity.ok(rsiIndicatorService.getStableRsiSeries(symbol, startTimestamp, endTimestamp, period));
+	}
+
+	/**
+	 * Returns a stable MACD series for the given symbol and time range.
+	 *
+	 * @param symbol         ticker symbol to query
+	 * @param startTimestamp epoch-second start of the requested range
+	 * @param endTimestamp   epoch-second end of the requested range
+	 * @param fastPeriod     MACD fast period (default 12)
+	 * @param slowPeriod     MACD slow period (default 26)
+	 * @param signalPeriod   MACD signal period (default 9)
+	 * @return MACD data points within the requested window
+	 */
+	@GetMapping("/macd")
+	@Operation(summary = "Get MACD series", description = "Returns stable MACD values for a symbol within the requested time range")
+	public ResponseEntity<MacdSeriesResponse> getMacdSeries(
+			@RequestParam String symbol,
+			@RequestParam long startTimestamp,
+			@RequestParam long endTimestamp,
+			@RequestParam(defaultValue = "12") int fastPeriod,
+			@RequestParam(defaultValue = "26") int slowPeriod,
+			@RequestParam(defaultValue = "9") int signalPeriod
+	) {
+		return ResponseEntity.ok(macdIndicatorService.getStableMacdSeries(
+				symbol, startTimestamp, endTimestamp, fastPeriod, slowPeriod, signalPeriod));
 	}
 }

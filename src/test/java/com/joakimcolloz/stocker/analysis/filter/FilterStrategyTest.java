@@ -3,6 +3,7 @@ package com.joakimcolloz.stocker.analysis.filter;
 import com.joakimcolloz.stocker.api.entity.Candlestick;
 import com.joakimcolloz.stocker.analysis.dto.filter.FilterMatch;
 import com.joakimcolloz.stocker.analysis.dto.filter.HighVolumeFilterParams;
+import com.joakimcolloz.stocker.analysis.dto.filter.MacdFilterParams;
 import com.joakimcolloz.stocker.analysis.dto.filter.RsiFilterParams;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -13,6 +14,7 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -165,5 +167,100 @@ class FilterStrategyTest {
         } catch (IllegalArgumentException e) {
             assertTrue(e.getMessage().contains("Unknown filter type"));
         }
+    }
+
+    @Test
+    @DisplayName("MacdFilter should require full time series")
+    void testMacdFilterNeedsFullTimeSeries() {
+        MacdFilter filter = new MacdFilter();
+        assertTrue(filter.needsFullTimeSeries());
+    }
+
+    @Test
+    @DisplayName("MacdFilter above_zero should match uptrend data")
+    void testMacdFilterAboveZero() {
+        MacdFilter filter = new MacdFilter();
+
+        // Create 55-day uptrend for stable MACD
+        List<Candlestick> trendingData = new ArrayList<>();
+        long baseTimestamp = 1704067200L;
+        for (int i = 0; i < 55; i++) {
+            Candlestick c = new Candlestick();
+            c.setSymbol("TREND.ST");
+            c.setTimestamp(baseTimestamp + (i * 86400));
+            c.setOpen(100.0 + i * 2);
+            c.setHigh(105.0 + i * 2);
+            c.setLow(95.0 + i * 2);
+            c.setClose(103.0 + i * 2);
+            c.setVolume(1000000L);
+            trendingData.add(c);
+        }
+
+        List<FilterMatch> matches = filter.apply(trendingData, trendingData,
+                new MacdFilterParams("above_zero", null, null, null));
+
+        for (FilterMatch match : matches) {
+            assertEquals("MACD", match.getFilterType());
+            assertTrue(match.getValues().get("macd") > 0);
+        }
+    }
+
+    @Test
+    @DisplayName("MacdFilter below_zero should match downtrend data")
+    void testMacdFilterBelowZero() {
+        MacdFilter filter = new MacdFilter();
+
+        // Create 55-day downtrend for stable MACD
+        List<Candlestick> decliningData = new ArrayList<>();
+        long baseTimestamp = 1704067200L;
+        for (int i = 0; i < 55; i++) {
+            Candlestick c = new Candlestick();
+            c.setSymbol("DECLINE.ST");
+            c.setTimestamp(baseTimestamp + (i * 86400));
+            c.setOpen(300.0 - i * 2);
+            c.setHigh(305.0 - i * 2);
+            c.setLow(295.0 - i * 2);
+            c.setClose(297.0 - i * 2);
+            c.setVolume(1000000L);
+            decliningData.add(c);
+        }
+
+        List<FilterMatch> matches = filter.apply(decliningData, decliningData,
+                new MacdFilterParams("below_zero", null, null, null));
+
+        for (FilterMatch match : matches) {
+            assertEquals("MACD", match.getFilterType());
+            assertTrue(match.getValues().get("macd") < 0);
+        }
+    }
+
+    @Test
+    @DisplayName("MacdFilter should throw on unknown condition")
+    void testMacdFilterUnknownCondition() {
+        MacdFilter filter = new MacdFilter();
+
+        List<Candlestick> data = new ArrayList<>();
+        long baseTimestamp = 1704067200L;
+        for (int i = 0; i < 55; i++) {
+            Candlestick c = new Candlestick();
+            c.setSymbol("TEST.ST");
+            c.setTimestamp(baseTimestamp + (i * 86400));
+            c.setOpen(100.0 + i);
+            c.setHigh(105.0 + i);
+            c.setLow(95.0 + i);
+            c.setClose(103.0 + i);
+            c.setVolume(1000000L);
+            data.add(c);
+        }
+
+        assertThrows(IllegalArgumentException.class, () ->
+                filter.apply(data, data, new MacdFilterParams("invalid_condition", null, null, null)));
+    }
+
+    @Test
+    @DisplayName("FilterFactory should return MacdFilter for MACD type")
+    void testFilterFactoryMacd() {
+        FilterStrategy macdFilter = FilterFactory.getFilter("MACD");
+        assertTrue(macdFilter instanceof MacdFilter);
     }
 }

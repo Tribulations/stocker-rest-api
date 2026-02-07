@@ -13,7 +13,7 @@ public class FilterFactory {
     static {
         filters.put("HIGH_VOLUME", new HighVolumeFilter());
         filters.put("RSI", new RSIFilter());
-        // We add more filters here as they're implemented
+        filters.put("MACD", new MacdFilter());
     }
 
     /**

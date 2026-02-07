@@ -17,6 +17,7 @@ public class FilterRegistry {
 		EnumMap<FilterType, FilterStrategy> map = new EnumMap<>(FilterType.class);
 		map.put(FilterType.HIGH_VOLUME, new HighVolumeFilter());
 		map.put(FilterType.RSI, new RSIFilter());
+		map.put(FilterType.MACD, new MacdFilter());
 		this.filters = Map.copyOf(map);
 	}
 
