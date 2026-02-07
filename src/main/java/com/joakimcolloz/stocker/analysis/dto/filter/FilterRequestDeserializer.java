@@ -33,6 +33,10 @@ public class FilterRequestDeserializer extends StdDeserializer<FilterRequest> {
 			params = paramsNode == null || paramsNode.isNull()
 					? null
 					: mapper.treeToValue(paramsNode, HighVolumeFilterParams.class);
+		} else if ("MACD".equals(type)) {
+			params = paramsNode == null || paramsNode.isNull()
+					? null
+					: mapper.treeToValue(paramsNode, MacdFilterParams.class);
 		} else {
 			params = new RawFilterParams(paramsNode);
 		}
