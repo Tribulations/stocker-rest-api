@@ -14,6 +14,7 @@ import java.util.List;
 import static com.joakimcolloz.stocker.api.AnalysisApiIntegrationTestUtil.humanReadableToTimestamp;
 import static org.hamcrest.Matchers.greaterThan;
 import static org.hamcrest.Matchers.hasSize;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -415,6 +416,40 @@ public class CombinedScanIntegrationTest extends AbstractCombinedScanIntegration
                             .content(objectMapper.writeValueAsString(request)))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$").isArray());
+        }
+    }
+
+    @Nested
+    @DisplayName("Supported Filters Endpoint Tests")
+    class SupportedFiltersTests {
+
+        @Test
+        @DisplayName("Should return all supported filter types")
+        void testSupportedFiltersEndpoint() throws Exception {
+            mockMvc.perform(get("/api/analysis/combined-scan/supported")
+                            .header("X-API-Key", "test-api-key"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$", hasSize(4)))
+                    .andExpect(jsonPath("$[0].type").value("HIGH_VOLUME"))
+                    .andExpect(jsonPath("$[0].name").exists())
+                    .andExpect(jsonPath("$[0].description").exists())
+                    .andExpect(jsonPath("$[0].params").exists())
+                    .andExpect(jsonPath("$[1].type").value("RSI"))
+                    .andExpect(jsonPath("$[2].type").value("MACD"))
+                    .andExpect(jsonPath("$[3].type").value("PATTERN"));
+        }
+
+        @Test
+        @DisplayName("Should include parameter descriptions for each filter")
+        void testSupportedFiltersContainParams() throws Exception {
+            mockMvc.perform(get("/api/analysis/combined-scan/supported")
+                            .header("X-API-Key", "test-api-key"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$[0].params.percentageAbove").exists())
+                    .andExpect(jsonPath("$[1].params.threshold").exists())
+                    .andExpect(jsonPath("$[1].params.condition").exists())
+                    .andExpect(jsonPath("$[2].params.condition").exists())
+                    .andExpect(jsonPath("$[3].params.pattern").exists());
         }
     }
 
