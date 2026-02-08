@@ -13,7 +13,8 @@ import java.util.Optional;
  * and by {@link PatternRegistry} to resolve detectors.
  */
 public enum PatternType {
-	HAMMER("HAMMER", "Hammer", "Bullish reversal with long lower shadow", "BULLISH");
+	HAMMER("HAMMER", "Hammer", "Bullish reversal with long lower shadow", "BULLISH"),
+	BULLISH_ENGULFING("BULLISH_ENGULFING", "Bullish Engulfing", "Bullish reversal with current candle engulfing previous", "BULLISH");
 
 	private final String code;
 	private final String name;

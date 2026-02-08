@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.joakimcolloz.stocker.analysis.dto.filter.FilterRequest;
 import com.joakimcolloz.stocker.analysis.dto.filter.HighVolumeFilterParams;
 import com.joakimcolloz.stocker.analysis.dto.filter.MacdFilterParams;
+import com.joakimcolloz.stocker.analysis.dto.filter.PatternFilterParams;
 import com.joakimcolloz.stocker.analysis.dto.filter.RsiFilterParams;
 import com.joakimcolloz.stocker.api.dao.CandlestickRepository;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -82,6 +83,13 @@ public abstract class AbstractCombinedScanIntegrationTest {
         FilterRequest filter = new FilterRequest();
         filter.setType("MACD");
         filter.setParams(new MacdFilterParams(condition, fastPeriod, slowPeriod, signalPeriod));
+        return filter;
+    }
+
+    protected FilterRequest createPatternFilter(String pattern) {
+        FilterRequest filter = new FilterRequest();
+        filter.setType("PATTERN");
+        filter.setParams(new PatternFilterParams(pattern));
         return filter;
     }
 }

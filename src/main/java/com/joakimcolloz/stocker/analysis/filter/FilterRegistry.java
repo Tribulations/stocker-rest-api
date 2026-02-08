@@ -1,5 +1,6 @@
 package com.joakimcolloz.stocker.analysis.filter;
 
+import com.joakimcolloz.stocker.analysis.pattern.PatternRegistry;
 import org.springframework.stereotype.Component;
 
 import java.util.EnumMap;
@@ -13,11 +14,12 @@ import java.util.Map;
 public class FilterRegistry {
 	private final Map<FilterType, FilterStrategy> filters;
 
-	public FilterRegistry() {
+	public FilterRegistry(PatternRegistry patternRegistry) {
 		EnumMap<FilterType, FilterStrategy> map = new EnumMap<>(FilterType.class);
 		map.put(FilterType.HIGH_VOLUME, new HighVolumeFilter());
 		map.put(FilterType.RSI, new RSIFilter());
 		map.put(FilterType.MACD, new MacdFilter());
+		map.put(FilterType.PATTERN, new PatternFilter(patternRegistry));
 		this.filters = Map.copyOf(map);
 	}
 

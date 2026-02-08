@@ -1,10 +1,15 @@
 package com.joakimcolloz.stocker.analysis.filter;
 
-import com.joakimcolloz.stocker.api.entity.Candlestick;
 import com.joakimcolloz.stocker.analysis.dto.filter.FilterMatch;
 import com.joakimcolloz.stocker.analysis.dto.filter.HighVolumeFilterParams;
 import com.joakimcolloz.stocker.analysis.dto.filter.MacdFilterParams;
+import com.joakimcolloz.stocker.analysis.dto.filter.PatternFilterParams;
 import com.joakimcolloz.stocker.analysis.dto.filter.RsiFilterParams;
+import com.joakimcolloz.stocker.analysis.pattern.BullishEngulfingDetector;
+import com.joakimcolloz.stocker.analysis.pattern.HammerPatternDetector;
+import com.joakimcolloz.stocker.analysis.pattern.PatternRegistry;
+import com.joakimcolloz.stocker.analysis.service.PatternDetectionService;
+import com.joakimcolloz.stocker.api.entity.Candlestick;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -262,5 +267,54 @@ class FilterStrategyTest {
     void testFilterFactoryMacd() {
         FilterStrategy macdFilter = FilterFactory.getFilter("MACD");
         assertTrue(macdFilter instanceof MacdFilter);
+    }
+
+    // --- PatternFilter tests ---
+
+    private PatternFilter createPatternFilter() {
+        PatternDetectionService pds = new PatternDetectionService();
+        PatternRegistry registry = new PatternRegistry(List.of(
+                new HammerPatternDetector(pds),
+                new BullishEngulfingDetector(pds)
+        ));
+        return new PatternFilter(registry);
+    }
+
+    @Test
+    @DisplayName("PatternFilter should require full time series")
+    void testPatternFilterNeedsFullTimeSeries() {
+        PatternFilter filter = createPatternFilter();
+        assertTrue(filter.needsFullTimeSeries());
+    }
+
+    @Test
+    @DisplayName("PatternFilter should detect hammer patterns")
+    void testPatternFilterHammer() {
+        PatternFilter filter = createPatternFilter();
+
+        List<Candlestick> data = new ArrayList<>();
+        long base = 1704067200L;
+
+        // Hammer: long lower shadow, small body, small upper shadow
+        // Body = |100 - 98| = 2, lower = 98 - 90 = 8, upper = 100.5 - 100 = 0.5
+        Candlestick hammer = new Candlestick(98.0, 100.5, 90.0, 100.0, 5000L, base, "TEST.ST");
+        data.add(hammer);
+
+        List<FilterMatch> matches = filter.apply(data, data, new PatternFilterParams("HAMMER"));
+
+        assertEquals(1, matches.size());
+        FilterMatch match = matches.get(0);
+        assertEquals("PATTERN", match.getFilterType());
+        assertTrue(match.getValues().containsKey("confidence"));
+        assertEquals("HAMMER", match.getParams().get("pattern"));
+    }
+
+    @Test
+    @DisplayName("PatternFilter should throw on unknown pattern code")
+    void testPatternFilterUnknownPattern() {
+        PatternFilter filter = createPatternFilter();
+
+        assertThrows(IllegalArgumentException.class, () ->
+                filter.apply(testData, testData, new PatternFilterParams("NONEXISTENT")));
     }
 }
