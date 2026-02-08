@@ -8,7 +8,8 @@ package com.joakimcolloz.stocker.analysis.filter;
 public enum FilterType {
 	HIGH_VOLUME,
 	RSI,
-	MACD;
+	MACD,
+	PATTERN;
 
 	/**
 	 * Parses the wire value (request payload) into a {@link FilterType}.

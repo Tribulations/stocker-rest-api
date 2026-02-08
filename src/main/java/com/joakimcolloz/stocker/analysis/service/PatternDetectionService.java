@@ -5,7 +5,10 @@ import com.joakimcolloz.stocker.api.entity.Candlestick;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * Service for detecting candlestick patterns.
@@ -64,6 +67,82 @@ public class PatternDetectionService {
         }
 
         return matches;
+    }
+
+    /**
+     * Detects Bullish Engulfing candlestick patterns in the provided data.
+     * <p>
+     * Bullish Engulfing criteria:
+     * <ul>
+     *   <li>Previous candle is bearish (close &lt; open)</li>
+     *   <li>Current candle is bullish (close &gt; open)</li>
+     *   <li>Current body engulfs previous body (open &lt;= prev close AND close &gt;= prev open)</li>
+     * </ul>
+     *
+     * @param candlesticks list of candlesticks to analyze
+     * @return list of detected bullish engulfing patterns
+     */
+    public List<PatternMatch> detectBullishEngulfing(List<Candlestick> candlesticks) {
+        List<PatternMatch> matches = new ArrayList<>();
+
+        Map<String, List<Candlestick>> bySymbol = candlesticks.stream()
+                .collect(Collectors.groupingBy(Candlestick::getSymbol));
+
+        for (Map.Entry<String, List<Candlestick>> entry : bySymbol.entrySet()) {
+            List<Candlestick> sorted = entry.getValue().stream()
+                    .sorted(Comparator.comparingLong(Candlestick::getTimestamp))
+                    .toList();
+
+            for (int i = 1; i < sorted.size(); i++) {
+                Candlestick prev = sorted.get(i - 1);
+                Candlestick curr = sorted.get(i);
+
+                boolean prevBearish = prev.getClose() < prev.getOpen();
+                boolean currBullish = curr.getClose() > curr.getOpen();
+                boolean engulfing = curr.getOpen() <= prev.getClose() && curr.getClose() >= prev.getOpen();
+
+                if (prevBearish && currBullish && engulfing) {
+                    int confidence = calculateEngulfingConfidence(prev, curr);
+                    matches.add(new PatternMatch(
+                            curr.getSymbol(),
+                            "BULLISH_ENGULFING",
+                            curr.getTimestamp(),
+                            confidence,
+                            "Bullish engulfing pattern"
+                    ));
+                }
+            }
+        }
+
+        return matches;
+    }
+
+    private int calculateEngulfingConfidence(Candlestick prev, Candlestick curr) {
+        double prevBody = Math.abs(prev.getClose() - prev.getOpen());
+        double currBody = Math.abs(curr.getClose() - curr.getOpen());
+
+        int confidence = 50;
+
+        // +20 if current body >= 1.5x previous body
+        if (prevBody > 0 && currBody >= 1.5 * prevBody) {
+            confidence += 20;
+        }
+
+        // +15 if current shadows are small (< 10% of body)
+        if (currBody > 0) {
+            double currUpperShadow = curr.getHigh() - curr.getClose();
+            double currLowerShadow = curr.getOpen() - curr.getLow();
+            if (currUpperShadow < 0.1 * currBody && currLowerShadow < 0.1 * currBody) {
+                confidence += 15;
+            }
+        }
+
+        // +15 if current volume > previous volume
+        if (curr.getVolume() > prev.getVolume()) {
+            confidence += 15;
+        }
+
+        return Math.min(confidence, 99);
     }
 
     /**
