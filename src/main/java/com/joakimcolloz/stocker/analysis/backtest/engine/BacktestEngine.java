@@ -14,6 +14,14 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * Bar-by-bar backtest engine. No Spring dependencies — pure logic, easy to unit test.
+ *
+ * <p>Walks candles chronologically for a single symbol: checks exit conditions first
+ * (stop-loss vs bar low, take-profit vs bar high, max holding days), then checks entry
+ * conditions. Supports RSI, MACD, and HIGH_VOLUME filters; rejects PATTERN.
+ * One position at a time per symbol; entry at bar close price.
+ */
 public class BacktestEngine {
 
     private static final long SECONDS_PER_DAY = 86_400L;
@@ -21,6 +29,17 @@ public class BacktestEngine {
     record Position(String symbol, long entryTimestamp, double entryPrice) {
     }
 
+    /**
+     * Runs the backtest for a single symbol over the given candle series.
+     *
+     * @param symbol                ticker symbol
+     * @param sortedCandles         candles sorted by timestamp ascending (may include lookback period)
+     * @param tradingStartTimestamp earliest timestamp at which entries are allowed
+     * @param entryConditions       filter conditions that must all be satisfied to enter
+     * @param exitRule              stop-loss / take-profit / max holding days
+     * @param indicators            pre-computed indicator values for this symbol
+     * @return list of completed trades
+     */
     public List<Trade> runForSymbol(
             String symbol,
             List<Candlestick> sortedCandles,

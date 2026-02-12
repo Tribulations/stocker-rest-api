@@ -2,6 +2,10 @@ package com.joakimcolloz.stocker.analysis.backtest.dto;
 
 import java.util.List;
 
+/**
+ * Backtest response containing the trade list and aggregate performance metrics.
+ * Use {@link #fromTrades} to compute metrics from a list of trades.
+ */
 public record BacktestResult(
         List<Trade> trades,
         int totalTrades,
@@ -18,6 +22,9 @@ public record BacktestResult(
         long endTimestamp
 ) {
 
+    /**
+     * Computes aggregate metrics (win rate, drawdown, averages) from the given trades.
+     */
     public static BacktestResult fromTrades(List<Trade> trades, long startTimestamp, long endTimestamp) {
         if (trades.isEmpty()) {
             return new BacktestResult(

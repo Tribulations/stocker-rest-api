@@ -10,6 +10,11 @@ import lombok.Data;
 
 import java.util.List;
 
+/**
+ * Request DTO for running a backtest.
+ * Reuses existing {@link FilterRequest} DTOs as entry conditions
+ * and adds {@link ExitRule} for position management.
+ */
 @Data
 @ValidTimeRange
 public class BacktestRequest implements TimeRangeRequest {

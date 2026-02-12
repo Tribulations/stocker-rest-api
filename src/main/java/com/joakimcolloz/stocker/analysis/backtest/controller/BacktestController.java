@@ -11,6 +11,9 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+/**
+ * REST controller exposing the backtest endpoint under {@code /api/analysis}.
+ */
 @RestController
 @RequestMapping("/api/analysis")
 public class BacktestController {

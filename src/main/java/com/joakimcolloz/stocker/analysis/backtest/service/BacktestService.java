@@ -23,6 +23,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+/**
+ * Orchestrates a backtest run: fetches candles (with extended lookback),
+ * pre-computes indicators per symbol, delegates to {@link BacktestEngine},
+ * and assembles the {@link BacktestResult}.
+ */
 @Service
 public class BacktestService {
 
@@ -40,6 +45,7 @@ public class BacktestService {
         this.filterRegistry = filterRegistry;
     }
 
+    /** Executes the backtest described by the request and returns aggregated results. */
     public BacktestResult runBacktest(BacktestRequest request) {
         long maxLookback = computeMaxLookback(request.getEntryConditions());
         long extendedStart = request.getStartTimestamp() - maxLookback;
