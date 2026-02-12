@@ -8,11 +8,14 @@ import com.joakimcolloz.stocker.analysis.backtest.engine.IndicatorContext;
 import com.joakimcolloz.stocker.analysis.dto.filter.FilterRequest;
 import com.joakimcolloz.stocker.analysis.dto.filter.HighVolumeFilterParams;
 import com.joakimcolloz.stocker.analysis.dto.filter.MacdFilterParams;
+import com.joakimcolloz.stocker.analysis.dto.filter.PatternFilterParams;
 import com.joakimcolloz.stocker.analysis.dto.filter.RsiFilterParams;
 import com.joakimcolloz.stocker.analysis.filter.FilterRegistry;
 import com.joakimcolloz.stocker.analysis.indicator.MacdCalculator;
 import com.joakimcolloz.stocker.analysis.indicator.MacdCalculator.MacdValues;
 import com.joakimcolloz.stocker.analysis.indicator.RsiCalculator;
+import com.joakimcolloz.stocker.analysis.pattern.PatternDetector;
+import com.joakimcolloz.stocker.analysis.pattern.PatternRegistry;
 import com.joakimcolloz.stocker.api.dao.CandlestickRepository;
 import com.joakimcolloz.stocker.api.entity.Candlestick;
 import org.springframework.stereotype.Service;
@@ -21,6 +24,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -38,11 +42,15 @@ public class BacktestService {
 
     private final CandlestickRepository candlestickRepository;
     private final FilterRegistry filterRegistry;
+    private final PatternRegistry patternRegistry;
     private final BacktestEngine engine = new BacktestEngine();
 
-    public BacktestService(CandlestickRepository candlestickRepository, FilterRegistry filterRegistry) {
+    public BacktestService(CandlestickRepository candlestickRepository,
+                           FilterRegistry filterRegistry,
+                           PatternRegistry patternRegistry) {
         this.candlestickRepository = candlestickRepository;
         this.filterRegistry = filterRegistry;
+        this.patternRegistry = patternRegistry;
     }
 
     /** Executes the backtest described by the request and returns aggregated results. */
@@ -58,6 +66,7 @@ public class BacktestService {
         boolean needsRsi = needsIndicator(request.getEntryConditions(), "RSI");
         boolean needsMacd = needsIndicator(request.getEntryConditions(), "MACD");
         boolean needsVolume = needsIndicator(request.getEntryConditions(), "HIGH_VOLUME");
+        boolean needsPattern = needsIndicator(request.getEntryConditions(), "PATTERN");
 
         List<Trade> allTrades = new ArrayList<>();
 
@@ -68,7 +77,7 @@ public class BacktestService {
                     .toList();
 
             IndicatorContext indicators = buildIndicatorContext(
-                    sortedCandles, request.getEntryConditions(), needsRsi, needsMacd, needsVolume);
+                    sortedCandles, request.getEntryConditions(), needsRsi, needsMacd, needsVolume, needsPattern);
 
             List<Trade> symbolTrades = engine.runForSymbol(
                     symbol, sortedCandles, request.getStartTimestamp(),
@@ -112,11 +121,13 @@ public class BacktestService {
             List<FilterRequest> entryConditions,
             boolean needsRsi,
             boolean needsMacd,
-            boolean needsVolume
+            boolean needsVolume,
+            boolean needsPattern
     ) {
         Map<Long, Double> rsiValues = null;
         Map<Long, MacdValues> macdValues = null;
         double avgVolume = 0;
+        Set<Long> patternTimestamps = null;
 
         if (needsRsi) {
             rsiValues = RsiCalculator.calculateStableRsiByTimestamp(sortedCandles, DEFAULT_RSI_PERIOD);
@@ -140,13 +151,31 @@ public class BacktestService {
                     .orElse(0);
         }
 
-        return new IndicatorContext(rsiValues, macdValues, avgVolume);
+        if (needsPattern) {
+            PatternFilterParams patternParams = findPatternParams(entryConditions);
+            String patternCode = patternParams.getPattern();
+            PatternDetector detector = patternRegistry.findDetector(patternCode)
+                    .orElseThrow(() -> new IllegalArgumentException("Unknown pattern code: " + patternCode));
+            patternTimestamps = detector.detect(sortedCandles).stream()
+                    .map(match -> match.getTimestamp())
+                    .collect(Collectors.toSet());
+        }
+
+        return new IndicatorContext(rsiValues, macdValues, avgVolume, patternTimestamps);
     }
 
     private MacdFilterParams findMacdParams(List<FilterRequest> conditions) {
         return conditions.stream()
                 .filter(c -> "MACD".equals(c.getType()))
                 .map(c -> (MacdFilterParams) c.getParams())
+                .findFirst()
+                .orElse(null);
+    }
+
+    private PatternFilterParams findPatternParams(List<FilterRequest> conditions) {
+        return conditions.stream()
+                .filter(c -> "PATTERN".equals(c.getType()))
+                .map(c -> (PatternFilterParams) c.getParams())
                 .findFirst()
                 .orElse(null);
     }

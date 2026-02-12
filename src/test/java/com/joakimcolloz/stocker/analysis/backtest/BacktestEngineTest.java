@@ -7,6 +7,7 @@ import com.joakimcolloz.stocker.analysis.backtest.engine.IndicatorContext;
 import com.joakimcolloz.stocker.analysis.dto.filter.FilterRequest;
 import com.joakimcolloz.stocker.analysis.dto.filter.HighVolumeFilterParams;
 import com.joakimcolloz.stocker.analysis.dto.filter.MacdFilterParams;
+import com.joakimcolloz.stocker.analysis.dto.filter.PatternFilterParams;
 import com.joakimcolloz.stocker.analysis.dto.filter.RsiFilterParams;
 import com.joakimcolloz.stocker.analysis.indicator.MacdCalculator.MacdValues;
 import com.joakimcolloz.stocker.api.entity.Candlestick;
@@ -19,6 +20,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -60,6 +62,13 @@ class BacktestEngineTest {
         return filter;
     }
 
+    private FilterRequest patternFilter() {
+        FilterRequest filter = new FilterRequest();
+        filter.setType("PATTERN");
+        filter.setParams(new PatternFilterParams("HAMMER"));
+        return filter;
+    }
+
     @Nested
     @DisplayName("RSI Entry + Take Profit Exit")
     class RsiTakeProfit {
@@ -75,7 +84,7 @@ class BacktestEngineTest {
             );
 
             Map<Long, Double> rsiValues = Map.of(BASE_TS, 25.0, BASE_TS + DAY, 45.0);
-            IndicatorContext ctx = new IndicatorContext(rsiValues, null, 0);
+            IndicatorContext ctx = new IndicatorContext(rsiValues, null, 0, null);
 
             ExitRule exitRule = new ExitRule(null, 15.0, null);
 
@@ -120,7 +129,7 @@ class BacktestEngineTest {
                     candle(BASE_TS + DAY, 198, 202, 185, 188, 1000)
             );
 
-            IndicatorContext ctx = new IndicatorContext(null, macdValues, 0);
+            IndicatorContext ctx = new IndicatorContext(null, macdValues, 0, null);
             ExitRule exitRule = new ExitRule(5.0, null, null);
 
             List<Trade> trades = engine.runForSymbol(
@@ -162,7 +171,7 @@ class BacktestEngineTest {
                     BASE_TS + 2 * DAY, new MacdValues(1.5, 1.0, 0.5)
             );
 
-            IndicatorContext ctx = new IndicatorContext(rsiValues, macdValues, 1000.0);
+            IndicatorContext ctx = new IndicatorContext(rsiValues, macdValues, 1000.0, null);
             ExitRule exitRule = new ExitRule(null, 10.0, null);
 
             List<FilterRequest> conditions = List.of(
@@ -194,7 +203,7 @@ class BacktestEngineTest {
                     BASE_TS, new MacdValues(-1.0, 0.5, -1.5)  // MACD below zero
             );
 
-            IndicatorContext ctx = new IndicatorContext(rsiValues, macdValues, 1000.0);
+            IndicatorContext ctx = new IndicatorContext(rsiValues, macdValues, 1000.0, null);
             ExitRule exitRule = new ExitRule(5.0, 10.0, null);
 
             List<FilterRequest> conditions = List.of(
@@ -231,7 +240,7 @@ class BacktestEngineTest {
             rsiValues.put(BASE_TS + 2 * DAY, 50.0);
             rsiValues.put(BASE_TS + 3 * DAY, 55.0);
 
-            IndicatorContext ctx = new IndicatorContext(rsiValues, null, 0);
+            IndicatorContext ctx = new IndicatorContext(rsiValues, null, 0, null);
             ExitRule exitRule = new ExitRule(null, null, 3);
 
             List<Trade> trades = engine.runForSymbol(
@@ -259,7 +268,7 @@ class BacktestEngineTest {
 
             // RSI always above 50 → "below 30" never met
             Map<Long, Double> rsiValues = Map.of(BASE_TS, 55.0, BASE_TS + DAY, 60.0);
-            IndicatorContext ctx = new IndicatorContext(rsiValues, null, 0);
+            IndicatorContext ctx = new IndicatorContext(rsiValues, null, 0, null);
             ExitRule exitRule = new ExitRule(5.0, 10.0, null);
 
             List<Trade> trades = engine.runForSymbol(
@@ -271,7 +280,7 @@ class BacktestEngineTest {
         @Test
         @DisplayName("Should produce no trades for empty candle list")
         void noTradesForEmptyCandles() {
-            IndicatorContext ctx = new IndicatorContext(null, null, 0);
+            IndicatorContext ctx = new IndicatorContext(null, null, 0, null);
             ExitRule exitRule = new ExitRule(5.0, 10.0, null);
 
             List<Trade> trades = engine.runForSymbol(
@@ -306,7 +315,7 @@ class BacktestEngineTest {
                     BASE_TS + 3 * DAY, 35.0
             );
 
-            IndicatorContext ctx = new IndicatorContext(rsiValues, null, 0);
+            IndicatorContext ctx = new IndicatorContext(rsiValues, null, 0, null);
             ExitRule exitRule = new ExitRule(5.0, 15.0, null);
 
             List<Trade> trades = engine.runForSymbol(
@@ -342,7 +351,7 @@ class BacktestEngineTest {
             );
 
             Map<Long, Double> rsiValues = Map.of(BASE_TS, 25.0, BASE_TS + DAY, 40.0);
-            IndicatorContext ctx = new IndicatorContext(rsiValues, null, 0);
+            IndicatorContext ctx = new IndicatorContext(rsiValues, null, 0, null);
             ExitRule exitRule = new ExitRule(10.0, 20.0, null);
 
             List<Trade> trades = engine.runForSymbol(
@@ -371,7 +380,7 @@ class BacktestEngineTest {
             );
 
             Map<Long, Double> rsiValues = Map.of(BASE_TS, 25.0, BASE_TS + DAY, 40.0);
-            IndicatorContext ctx = new IndicatorContext(rsiValues, null, 0);
+            IndicatorContext ctx = new IndicatorContext(rsiValues, null, 0, null);
             ExitRule exitRule = new ExitRule(5.0, null, null);
 
             List<Trade> trades = engine.runForSymbol(
@@ -393,7 +402,7 @@ class BacktestEngineTest {
             );
 
             Map<Long, Double> rsiValues = Map.of(BASE_TS, 25.0, BASE_TS + DAY, 50.0);
-            IndicatorContext ctx = new IndicatorContext(rsiValues, null, 0);
+            IndicatorContext ctx = new IndicatorContext(rsiValues, null, 0, null);
             ExitRule exitRule = new ExitRule(null, 10.0, null);
 
             List<Trade> trades = engine.runForSymbol(
@@ -420,7 +429,7 @@ class BacktestEngineTest {
 
             // RSI below 30 on bar 0 only
             Map<Long, Double> rsiValues = Map.of(BASE_TS, 25.0, BASE_TS + DAY, 55.0);
-            IndicatorContext ctx = new IndicatorContext(rsiValues, null, 0);
+            IndicatorContext ctx = new IndicatorContext(rsiValues, null, 0, null);
             ExitRule exitRule = new ExitRule(5.0, 15.0, null);
 
             List<Trade> trades = engine.runForSymbol(
@@ -432,23 +441,87 @@ class BacktestEngineTest {
     }
 
     @Nested
-    @DisplayName("PATTERN Filter Rejection")
-    class PatternRejection {
+    @DisplayName("PATTERN Entry")
+    class PatternEntry {
 
         @Test
-        @DisplayName("Should throw IllegalArgumentException for PATTERN filter")
-        void patternFilterThrows() {
-            List<Candlestick> candles = List.of(candle(BASE_TS, 98, 102, 95, 100, 1000));
+        @DisplayName("Should enter on PATTERN match and exit on take-profit")
+        void entryOnPatternMatchExitOnTakeProfit() {
+            // Bar 0: pattern detected (timestamp in set) → entry at close=100
+            // Bar 1: high=112 → take-profit at 110 (10% above 100)
+            List<Candlestick> candles = List.of(
+                    candle(BASE_TS, 98, 102, 95, 100, 1000),
+                    candle(BASE_TS + DAY, 101, 112, 99, 108, 1000)
+            );
 
-            FilterRequest patternFilter = new FilterRequest();
-            patternFilter.setType("PATTERN");
+            Set<Long> patternTimestamps = Set.of(BASE_TS);
+            IndicatorContext ctx = new IndicatorContext(null, null, 0, patternTimestamps);
+            ExitRule exitRule = new ExitRule(null, 10.0, null);
 
-            IndicatorContext ctx = new IndicatorContext(null, null, 0);
-            ExitRule exitRule = new ExitRule(5.0, null, null);
+            List<Trade> trades = engine.runForSymbol(
+                    "TEST.ST", candles, BASE_TS, List.of(patternFilter()), exitRule, ctx);
 
-            assertThrows(IllegalArgumentException.class, () ->
-                    engine.runForSymbol("TEST.ST", candles, BASE_TS,
-                            List.of(patternFilter), exitRule, ctx));
+            assertEquals(1, trades.size());
+            Trade trade = trades.getFirst();
+            assertEquals(BASE_TS, trade.entryTimestamp());
+            assertEquals(100.0, trade.entryPrice());
+            assertEquals("TAKE_PROFIT", trade.exitReason());
+            assertEquals(110.0, trade.exitPrice(), 0.001);
+        }
+
+        @Test
+        @DisplayName("Should not enter when pattern timestamp not in set")
+        void noEntryWhenPatternNotMatched() {
+            List<Candlestick> candles = List.of(
+                    candle(BASE_TS, 98, 102, 95, 100, 1000),
+                    candle(BASE_TS + DAY, 99, 103, 96, 101, 1000)
+            );
+
+            // Pattern detected on a different timestamp — not on any bar in the series
+            Set<Long> patternTimestamps = Set.of(BASE_TS + 5 * DAY);
+            IndicatorContext ctx = new IndicatorContext(null, null, 0, patternTimestamps);
+            ExitRule exitRule = new ExitRule(5.0, 10.0, null);
+
+            List<Trade> trades = engine.runForSymbol(
+                    "TEST.ST", candles, BASE_TS, List.of(patternFilter()), exitRule, ctx);
+
+            assertTrue(trades.isEmpty());
+        }
+
+        @Test
+        @DisplayName("Should enter only when both PATTERN and RSI conditions are met")
+        void combinedPatternAndRsi() {
+            // Bar 0: pattern match ✓, RSI=25 (below 30) ✓ → entry at close=100
+            // Bar 1: pattern match ✓, RSI=55 (above 30) ✗ → no entry (already in position anyway)
+            // Bar 1: high=112 → take-profit at 110 (10% above 100) → exit
+            // Bar 2: pattern match ✗, RSI=28 (below 30) ✓ → no entry (pattern not matched)
+            List<Candlestick> candles = List.of(
+                    candle(BASE_TS, 98, 102, 95, 100, 1000),
+                    candle(BASE_TS + DAY, 101, 112, 99, 108, 1000),
+                    candle(BASE_TS + 2 * DAY, 107, 110, 105, 109, 1000)
+            );
+
+            Map<Long, Double> rsiValues = Map.of(
+                    BASE_TS, 25.0,
+                    BASE_TS + DAY, 55.0,
+                    BASE_TS + 2 * DAY, 28.0
+            );
+            Set<Long> patternTimestamps = Set.of(BASE_TS, BASE_TS + DAY);
+            IndicatorContext ctx = new IndicatorContext(rsiValues, null, 0, patternTimestamps);
+            ExitRule exitRule = new ExitRule(5.0, 10.0, null);
+
+            List<FilterRequest> conditions = List.of(patternFilter(), rsiFilter(30, "below"));
+
+            List<Trade> trades = engine.runForSymbol(
+                    "TEST.ST", candles, BASE_TS, conditions, exitRule, ctx);
+
+            // Only 1 trade: entry on bar 0, exit take-profit on bar 1
+            // Bar 2 has RSI below 30 but no pattern match → no re-entry
+            assertEquals(1, trades.size());
+            Trade trade = trades.getFirst();
+            assertEquals(100.0, trade.entryPrice());
+            assertEquals("TAKE_PROFIT", trade.exitReason());
+            assertEquals(110.0, trade.exitPrice(), 0.001);
         }
     }
 }
