@@ -19,7 +19,7 @@ import java.util.Map;
  *
  * <p>Walks candles chronologically for a single symbol: checks exit conditions first
  * (stop-loss vs bar low, take-profit vs bar high, max holding days), then checks entry
- * conditions. Supports RSI, MACD, and HIGH_VOLUME filters; rejects PATTERN.
+ * conditions. Supports RSI, MACD, HIGH_VOLUME, and PATTERN filters.
  * One position at a time per symbol; entry at bar close price.
  */
 public class BacktestEngine {
@@ -152,8 +152,7 @@ public class BacktestEngine {
             case "RSI" -> evaluateRsi(bar, (RsiFilterParams) params, indicators);
             case "MACD" -> evaluateMacd(bar, previousBar, (MacdFilterParams) params, indicators);
             case "HIGH_VOLUME" -> evaluateHighVolume(bar, (HighVolumeFilterParams) params, indicators);
-            case "PATTERN" -> throw new IllegalArgumentException(
-                    "PATTERN filter is not supported as a backtest entry condition in Phase 1");
+            case "PATTERN" -> evaluatePattern(bar, indicators);
             default -> throw new IllegalArgumentException("Unknown filter type: " + type);
         };
     }
@@ -207,5 +206,10 @@ public class BacktestEngine {
         int percentageAbove = params.getPercentageAbove();
         double threshold = indicators.avgVolume() * (1.0 + percentageAbove / 100.0);
         return bar.getVolume() >= threshold;
+    }
+
+    private boolean evaluatePattern(Candlestick bar, IndicatorContext indicators) {
+        return indicators.patternTimestamps() != null
+                && indicators.patternTimestamps().contains(bar.getTimestamp());
     }
 }

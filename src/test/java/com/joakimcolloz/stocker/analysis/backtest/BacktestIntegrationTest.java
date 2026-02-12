@@ -27,6 +27,58 @@ public class BacktestIntegrationTest extends AbstractCombinedScanIntegrationTest
         candlestickRepository.deleteAll();
     }
 
+    private void insertPatternBacktestData() {
+        List<Candlestick> testData = new ArrayList<>();
+        long baseTimestamp = humanReadableToTimestamp("2024-01-01 09:00:00");
+
+        // Day 0: normal candle (no hammer)
+        Candlestick day0 = new Candlestick();
+        day0.setSymbol("ABB.ST");
+        day0.setTimestamp(baseTimestamp);
+        day0.setOpen(100.0);
+        day0.setHigh(105.0);
+        day0.setLow(99.0);
+        day0.setClose(104.0);
+        day0.setVolume(500000L);
+        testData.add(day0);
+
+        // Day 1: hammer candle — long lower shadow, tiny upper shadow, small body
+        // body=1.0, lowerShadow=4.0 (>2*body), upperShadow=0.2 (<0.3*body)
+        Candlestick hammer = new Candlestick();
+        hammer.setSymbol("ABB.ST");
+        hammer.setTimestamp(baseTimestamp + 86400);
+        hammer.setOpen(99.0);
+        hammer.setHigh(100.2);
+        hammer.setLow(95.0);
+        hammer.setClose(100.0);
+        hammer.setVolume(500000L);
+        testData.add(hammer);
+
+        // Day 2: rally (high enough to trigger take-profit)
+        Candlestick rally = new Candlestick();
+        rally.setSymbol("ABB.ST");
+        rally.setTimestamp(baseTimestamp + 2 * 86400);
+        rally.setOpen(101.0);
+        rally.setHigh(115.0);
+        rally.setLow(100.0);
+        rally.setClose(112.0);
+        rally.setVolume(600000L);
+        testData.add(rally);
+
+        // Day 3: continuation
+        Candlestick day3 = new Candlestick();
+        day3.setSymbol("ABB.ST");
+        day3.setTimestamp(baseTimestamp + 3 * 86400);
+        day3.setOpen(112.0);
+        day3.setHigh(116.0);
+        day3.setLow(110.0);
+        day3.setClose(114.0);
+        day3.setVolume(500000L);
+        testData.add(day3);
+
+        candlestickRepository.saveAll(testData);
+    }
+
     private void insertBacktestData() {
         List<Candlestick> testData = new ArrayList<>();
         long baseTimestamp = humanReadableToTimestamp("2024-01-01 09:00:00");
@@ -127,6 +179,28 @@ public class BacktestIntegrationTest extends AbstractCombinedScanIntegrationTest
                     .andExpect(jsonPath("$.totalTrades").value(0))
                     .andExpect(jsonPath("$.trades", hasSize(0)))
                     .andExpect(jsonPath("$.winRate").value(0.0));
+        }
+
+        @Test
+        @DisplayName("Should return result with PATTERN entry condition (HAMMER)")
+        void backtestWithPattern() throws Exception {
+            insertPatternBacktestData();
+
+            BacktestRequest request = new BacktestRequest();
+            request.setEntryConditions(List.of(createPatternFilter("HAMMER")));
+            request.setExitRule(new ExitRule(5.0, 10.0, 5));
+            request.setStartTimestamp(humanReadableToTimestamp("2024-01-01 00:00:00"));
+            request.setEndTimestamp(humanReadableToTimestamp("2024-01-10 23:59:59"));
+            request.setSymbols(List.of("ABB.ST"));
+
+            mockMvc.perform(post("/api/analysis/backtest")
+                            .header("X-API-Key", "test-api-key")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(objectMapper.writeValueAsString(request)))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.totalTrades").value(greaterThanOrEqualTo(1)))
+                    .andExpect(jsonPath("$.trades").isArray())
+                    .andExpect(jsonPath("$.trades", hasSize(greaterThanOrEqualTo(1))));
         }
 
         @Test
