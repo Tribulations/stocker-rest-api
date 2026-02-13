@@ -1,5 +1,6 @@
 package com.joakimcolloz.stocker.analysis.backtest.engine;
 
+import com.joakimcolloz.stocker.analysis.backtest.dto.EntryRule;
 import com.joakimcolloz.stocker.analysis.backtest.dto.ExitRule;
 import com.joakimcolloz.stocker.analysis.backtest.dto.Trade;
 import com.joakimcolloz.stocker.analysis.dto.filter.FilterParams;
@@ -17,16 +18,30 @@ import java.util.Map;
 /**
  * Bar-by-bar backtest engine. No Spring dependencies — pure logic, easy to unit test.
  *
- * <p>Walks candles chronologically for a single symbol: checks exit conditions first
- * (stop-loss vs bar low, take-profit vs bar high, max holding days), then checks entry
- * conditions. Supports RSI, MACD, HIGH_VOLUME, and PATTERN filters.
- * One position at a time per symbol; entry at bar close price.
+ * <p>Walks candles chronologically for a single symbol using a three-state machine:
+ * check exits, try to fill pending orders, then check entry conditions.
+ * Supports NEXT_BAR_OPEN and LIMIT_ORDER entry modes.
+ * One position at a time per symbol.
  */
 public class BacktestEngine {
 
     private static final long SECONDS_PER_DAY = 86_400L;
 
     record Position(String symbol, long entryTimestamp, double entryPrice) {
+    }
+
+    private static class PendingOrder {
+        final String symbol;
+        final double limitPrice;
+        final int signalBarIndex;
+        int barsRemaining;
+
+        PendingOrder(String symbol, double limitPrice, int signalBarIndex, int barsRemaining) {
+            this.symbol = symbol;
+            this.limitPrice = limitPrice;
+            this.signalBarIndex = signalBarIndex;
+            this.barsRemaining = barsRemaining;
+        }
     }
 
     /**
@@ -38,6 +53,7 @@ public class BacktestEngine {
      * @param entryConditions       filter conditions that must all be satisfied to enter
      * @param exitRule              stop-loss / take-profit / max holding days
      * @param indicators            pre-computed indicator values for this symbol
+     * @param entryRule             controls entry mode (NEXT_BAR_OPEN or LIMIT_ORDER)
      * @return list of completed trades
      */
     public List<Trade> runForSymbol(
@@ -46,16 +62,23 @@ public class BacktestEngine {
             long tradingStartTimestamp,
             List<FilterRequest> entryConditions,
             ExitRule exitRule,
-            IndicatorContext indicators
+            IndicatorContext indicators,
+            EntryRule entryRule
     ) {
         List<Trade> trades = new ArrayList<>();
         Position position = null;
+        PendingOrder pendingOrder = null;
+
+        String entryMode = entryRule.entryMode();
+        double limitOffsetPercent = entryRule.limitOffsetPercent() != null ? entryRule.limitOffsetPercent() : 0.0;
+        double penetrationPercent = entryRule.penetrationPercent() != null ? entryRule.penetrationPercent() : 0.0;
+        int maxBarsToFill = entryRule.maxBarsToFill() != null ? entryRule.maxBarsToFill() : 1;
 
         for (int i = 0; i < sortedCandles.size(); i++) {
             Candlestick bar = sortedCandles.get(i);
 
+            // 1. Check exits (existing logic)
             if (position != null) {
-                // Check exit conditions
                 Trade closedTrade = checkExit(position, bar, exitRule);
                 if (closedTrade != null) {
                     trades.add(closedTrade);
@@ -63,11 +86,44 @@ public class BacktestEngine {
                 }
             }
 
-            if (position == null && bar.getTimestamp() >= tradingStartTimestamp) {
-                // Check entry conditions
+            // 2. Try to fill pending order
+            if (pendingOrder != null && position == null) {
+                if ("NEXT_BAR_OPEN".equals(entryMode)) {
+                    position = new Position(symbol, bar.getTimestamp(), bar.getOpen());
+                    pendingOrder = null;
+                } else { // LIMIT_ORDER
+                    double fillThreshold = pendingOrder.limitPrice * (1.0 - penetrationPercent / 100.0);
+                    if (bar.getLow() <= fillThreshold) {
+                        position = new Position(symbol, bar.getTimestamp(), pendingOrder.limitPrice);
+                        pendingOrder = null;
+                    } else {
+                        pendingOrder.barsRemaining--;
+                        if (pendingOrder.barsRemaining <= 0) {
+                            pendingOrder = null; // expired, no trade
+                        }
+                    }
+                }
+
+                // Check exits on the same bar where we just entered (intrabar stop/TP)
+                if (position != null) {
+                    Trade closedTrade = checkExit(position, bar, exitRule);
+                    if (closedTrade != null) {
+                        trades.add(closedTrade);
+                        position = null;
+                    }
+                }
+            }
+
+            // 3. Check entry conditions (only if no position AND no pending order)
+            if (position == null && pendingOrder == null && bar.getTimestamp() >= tradingStartTimestamp) {
                 Candlestick previousBar = i > 0 ? sortedCandles.get(i - 1) : null;
                 if (allEntryConditionsMet(bar, previousBar, entryConditions, indicators)) {
-                    position = new Position(symbol, bar.getTimestamp(), bar.getClose());
+                    if ("NEXT_BAR_OPEN".equals(entryMode)) {
+                        pendingOrder = new PendingOrder(symbol, 0, i, 1);
+                    } else { // LIMIT_ORDER
+                        double limitPrice = bar.getClose() * (1.0 - limitOffsetPercent / 100.0);
+                        pendingOrder = new PendingOrder(symbol, limitPrice, i, maxBarsToFill);
+                    }
                 }
             }
         }
@@ -77,6 +133,7 @@ public class BacktestEngine {
             Candlestick lastBar = sortedCandles.getLast();
             trades.add(closeTrade(position, lastBar.getTimestamp(), lastBar.getClose(), "END_OF_DATA"));
         }
+        // Pending orders at end of data are simply dropped (no forced fill)
 
         return trades;
     }

@@ -32,4 +32,8 @@ public class BacktestRequest implements TimeRangeRequest {
     private long endTimestamp;
 
     private List<String> symbols;
+
+    private Double startingCapital;
+
+    private EntryRule entryRule;
 }
