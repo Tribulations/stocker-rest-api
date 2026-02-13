@@ -10,7 +10,7 @@
 	</parent>
 	<groupId>com.joakimcolloz</groupId>
 	<artifactId>stocker-rest-api</artifactId>
-	<version>0.23-SNAPSHOT</version>
+	<version>0.24-SNAPSHOT</version>
 	<name>Stocker REST API</name>
 	<description>Spring Boot API providing secure access to stock market data</description>
 	<url/>
