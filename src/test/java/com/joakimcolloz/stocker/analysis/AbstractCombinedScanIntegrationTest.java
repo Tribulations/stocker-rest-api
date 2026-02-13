@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.joakimcolloz.stocker.analysis.dto.filter.FilterRequest;
 import com.joakimcolloz.stocker.analysis.dto.filter.HighVolumeFilterParams;
 import com.joakimcolloz.stocker.analysis.dto.filter.MacdFilterParams;
+import com.joakimcolloz.stocker.analysis.dto.filter.MovingAverageFilterParams;
 import com.joakimcolloz.stocker.analysis.dto.filter.PatternFilterParams;
 import com.joakimcolloz.stocker.analysis.dto.filter.RsiFilterParams;
 import com.joakimcolloz.stocker.api.dao.CandlestickRepository;
@@ -90,6 +91,13 @@ public abstract class AbstractCombinedScanIntegrationTest {
         FilterRequest filter = new FilterRequest();
         filter.setType("PATTERN");
         filter.setParams(new PatternFilterParams(pattern));
+        return filter;
+    }
+
+    protected FilterRequest createMaCrossoverFilter(int period, String maType, String condition) {
+        FilterRequest filter = new FilterRequest();
+        filter.setType("MA_CROSSOVER");
+        filter.setParams(new MovingAverageFilterParams(period, maType, condition));
         return filter;
     }
 }

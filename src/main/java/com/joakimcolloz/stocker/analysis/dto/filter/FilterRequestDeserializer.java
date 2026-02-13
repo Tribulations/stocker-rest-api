@@ -41,6 +41,10 @@ public class FilterRequestDeserializer extends StdDeserializer<FilterRequest> {
 			params = paramsNode == null || paramsNode.isNull()
 					? null
 					: mapper.treeToValue(paramsNode, PatternFilterParams.class);
+		} else if ("MA_CROSSOVER".equals(type)) {
+			params = paramsNode == null || paramsNode.isNull()
+					? null
+					: mapper.treeToValue(paramsNode, MovingAverageFilterParams.class);
 		} else {
 			params = new RawFilterParams(paramsNode);
 		}

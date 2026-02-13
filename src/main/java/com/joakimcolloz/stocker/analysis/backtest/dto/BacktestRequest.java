@@ -36,4 +36,6 @@ public class BacktestRequest implements TimeRangeRequest {
     private Double startingCapital;
 
     private EntryRule entryRule;
+
+    private List<FilterRequest> exitConditions;
 }

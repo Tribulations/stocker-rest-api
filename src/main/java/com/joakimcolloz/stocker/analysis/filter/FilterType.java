@@ -28,7 +28,13 @@ public enum FilterType {
 
 	PATTERN("PATTERN", "Candlestick Pattern",
 			"Detects candlestick patterns (use GET /api/analysis/patterns/supported for available patterns)",
-			Map.of("pattern", "String — pattern code, e.g. HAMMER, BULLISH_ENGULFING"));
+			Map.of("pattern", "String — pattern code, e.g. HAMMER, BULLISH_ENGULFING")),
+
+	MA_CROSSOVER("MA_CROSSOVER", "Moving Average",
+			"Filters by moving average crossovers and price-to-MA relationships",
+			Map.of("period", "Integer — MA period (e.g. 20, 50, 200)",
+					"maType", "String — \"SMA\" or \"EMA\"",
+					"condition", "String — price_above_ma, price_below_ma, price_crosses_above_ma, price_crosses_below_ma"));
 
 	private final String code;
 	private final String name;
