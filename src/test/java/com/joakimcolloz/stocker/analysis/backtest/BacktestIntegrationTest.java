@@ -347,4 +347,55 @@ public class BacktestIntegrationTest extends AbstractCombinedScanIntegrationTest
                     .andExpect(status().isUnauthorized());
         }
     }
+
+    @Nested
+    @DisplayName("MA_CROSSOVER and Exit Conditions")
+    class MaCrossoverAndExitConditions {
+
+        @Test
+        @DisplayName("Should execute backtest with MA_CROSSOVER entry condition")
+        void backtestWithMaCrossoverEntry() throws Exception {
+            insertBacktestData();
+
+            BacktestRequest request = new BacktestRequest();
+            request.setEntryConditions(List.of(
+                    createMaCrossoverFilter(5, "SMA", "price_above_ma")));
+            request.setExitRule(new ExitRule(5.0, 10.0, 10));
+            request.setStartTimestamp(humanReadableToTimestamp("2024-01-15 00:00:00"));
+            request.setEndTimestamp(humanReadableToTimestamp("2024-02-05 23:59:59"));
+            request.setSymbols(List.of("ABB.ST"));
+
+            mockMvc.perform(post("/api/analysis/backtest")
+                            .header("X-API-Key", "test-api-key")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(objectMapper.writeValueAsString(request)))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.totalTrades").isNumber())
+                    .andExpect(jsonPath("$.trades").isArray())
+                    .andExpect(jsonPath("$.startingCapital").value(10000.0))
+                    .andExpect(jsonPath("$.finalCapital").isNumber());
+        }
+
+        @Test
+        @DisplayName("Should execute backtest with exit conditions (RSI exit)")
+        void backtestWithExitConditions() throws Exception {
+            insertBacktestData();
+
+            BacktestRequest request = new BacktestRequest();
+            request.setEntryConditions(List.of(createRSIFilter(90, "above")));
+            request.setExitRule(new ExitRule(10.0, null, 20));
+            request.setExitConditions(List.of(createRSIFilter(60, "below")));
+            request.setStartTimestamp(humanReadableToTimestamp("2024-01-15 00:00:00"));
+            request.setEndTimestamp(humanReadableToTimestamp("2024-02-05 23:59:59"));
+            request.setSymbols(List.of("ABB.ST"));
+
+            mockMvc.perform(post("/api/analysis/backtest")
+                            .header("X-API-Key", "test-api-key")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(objectMapper.writeValueAsString(request)))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.totalTrades").isNumber())
+                    .andExpect(jsonPath("$.trades").isArray());
+        }
+    }
 }

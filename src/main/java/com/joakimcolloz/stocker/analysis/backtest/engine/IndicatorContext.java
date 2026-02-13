@@ -13,11 +13,13 @@ import java.util.Set;
  * @param macdValues         timestamp to MACD values (null if MACD not requested)
  * @param avgVolume          average volume across the series (0 if volume not requested)
  * @param patternTimestamps  timestamps where the requested pattern was detected (null if PATTERN not requested)
+ * @param maValues           keyed by "SMA_20", "EMA_50", etc.; each value is timestamp to MA value (null if MA not requested)
  */
 public record IndicatorContext(
         Map<Long, Double> rsiValues,
         Map<Long, MacdValues> macdValues,
         double avgVolume,
-        Set<Long> patternTimestamps
+        Set<Long> patternTimestamps,
+        Map<String, Map<Long, Double>> maValues
 ) {
 }

@@ -429,14 +429,15 @@ public class CombinedScanIntegrationTest extends AbstractCombinedScanIntegration
             mockMvc.perform(get("/api/analysis/combined-scan/supported")
                             .header("X-API-Key", "test-api-key"))
                     .andExpect(status().isOk())
-                    .andExpect(jsonPath("$", hasSize(4)))
+                    .andExpect(jsonPath("$", hasSize(5)))
                     .andExpect(jsonPath("$[0].type").value("HIGH_VOLUME"))
                     .andExpect(jsonPath("$[0].name").exists())
                     .andExpect(jsonPath("$[0].description").exists())
                     .andExpect(jsonPath("$[0].params").exists())
                     .andExpect(jsonPath("$[1].type").value("RSI"))
                     .andExpect(jsonPath("$[2].type").value("MACD"))
-                    .andExpect(jsonPath("$[3].type").value("PATTERN"));
+                    .andExpect(jsonPath("$[3].type").value("PATTERN"))
+                    .andExpect(jsonPath("$[4].type").value("MA_CROSSOVER"));
         }
 
         @Test

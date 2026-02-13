@@ -7,6 +7,7 @@ import com.joakimcolloz.stocker.analysis.dto.filter.FilterParams;
 import com.joakimcolloz.stocker.analysis.dto.filter.FilterRequest;
 import com.joakimcolloz.stocker.analysis.dto.filter.HighVolumeFilterParams;
 import com.joakimcolloz.stocker.analysis.dto.filter.MacdFilterParams;
+import com.joakimcolloz.stocker.analysis.dto.filter.MovingAverageFilterParams;
 import com.joakimcolloz.stocker.analysis.dto.filter.RsiFilterParams;
 import com.joakimcolloz.stocker.analysis.indicator.MacdCalculator.MacdValues;
 import com.joakimcolloz.stocker.api.entity.Candlestick;
@@ -52,6 +53,7 @@ public class BacktestEngine {
      * @param tradingStartTimestamp earliest timestamp at which entries are allowed
      * @param entryConditions       filter conditions that must all be satisfied to enter
      * @param exitRule              stop-loss / take-profit / max holding days
+     * @param exitConditions        indicator-based exit conditions (OR logic), or null for none
      * @param indicators            pre-computed indicator values for this symbol
      * @param entryRule             controls entry mode (NEXT_BAR_OPEN or LIMIT_ORDER)
      * @return list of completed trades
@@ -62,6 +64,7 @@ public class BacktestEngine {
             long tradingStartTimestamp,
             List<FilterRequest> entryConditions,
             ExitRule exitRule,
+            List<FilterRequest> exitConditions,
             IndicatorContext indicators,
             EntryRule entryRule
     ) {
@@ -76,10 +79,11 @@ public class BacktestEngine {
 
         for (int i = 0; i < sortedCandles.size(); i++) {
             Candlestick bar = sortedCandles.get(i);
+            Candlestick previousBar = i > 0 ? sortedCandles.get(i - 1) : null;
 
             // 1. Check exits (existing logic)
             if (position != null) {
-                Trade closedTrade = checkExit(position, bar, exitRule);
+                Trade closedTrade = checkExit(position, bar, previousBar, exitRule, exitConditions, indicators);
                 if (closedTrade != null) {
                     trades.add(closedTrade);
                     position = null;
@@ -106,7 +110,7 @@ public class BacktestEngine {
 
                 // Check exits on the same bar where we just entered (intrabar stop/TP)
                 if (position != null) {
-                    Trade closedTrade = checkExit(position, bar, exitRule);
+                    Trade closedTrade = checkExit(position, bar, previousBar, exitRule, exitConditions, indicators);
                     if (closedTrade != null) {
                         trades.add(closedTrade);
                         position = null;
@@ -116,7 +120,6 @@ public class BacktestEngine {
 
             // 3. Check entry conditions (only if no position AND no pending order)
             if (position == null && pendingOrder == null && bar.getTimestamp() >= tradingStartTimestamp) {
-                Candlestick previousBar = i > 0 ? sortedCandles.get(i - 1) : null;
                 if (allEntryConditionsMet(bar, previousBar, entryConditions, indicators)) {
                     if ("NEXT_BAR_OPEN".equals(entryMode)) {
                         pendingOrder = new PendingOrder(symbol, 0, i, 1);
@@ -138,8 +141,10 @@ public class BacktestEngine {
         return trades;
     }
 
-    private Trade checkExit(Position position, Candlestick bar, ExitRule exitRule) {
-        // Check stop-loss against bar's low
+    private Trade checkExit(Position position, Candlestick bar, Candlestick previousBar,
+                            ExitRule exitRule, List<FilterRequest> exitConditions,
+                            IndicatorContext indicators) {
+        // 1. Stop-loss (highest priority — risk management)
         if (exitRule.stopLossPercent() != null) {
             double stopPrice = position.entryPrice() * (1.0 - exitRule.stopLossPercent() / 100.0);
             if (bar.getLow() <= stopPrice) {
@@ -147,7 +152,7 @@ public class BacktestEngine {
             }
         }
 
-        // Check take-profit against bar's high
+        // 2. Take-profit
         if (exitRule.takeProfitPercent() != null) {
             double targetPrice = position.entryPrice() * (1.0 + exitRule.takeProfitPercent() / 100.0);
             if (bar.getHigh() >= targetPrice) {
@@ -155,7 +160,17 @@ public class BacktestEngine {
             }
         }
 
-        // Check max holding days
+        // 3. Indicator-based exit conditions (OR logic — any condition triggers exit)
+        if (exitConditions != null) {
+            for (FilterRequest condition : exitConditions) {
+                if (evaluateCondition(bar, previousBar, condition, indicators)) {
+                    return closeTrade(position, bar.getTimestamp(), bar.getClose(),
+                            condition.getType() + "_EXIT");
+                }
+            }
+        }
+
+        // 4. Max holding days (lowest priority)
         if (exitRule.maxHoldingDays() != null) {
             long holdingSeconds = bar.getTimestamp() - position.entryTimestamp();
             int holdingDays = (int) (holdingSeconds / SECONDS_PER_DAY);
@@ -210,6 +225,8 @@ public class BacktestEngine {
             case "MACD" -> evaluateMacd(bar, previousBar, (MacdFilterParams) params, indicators);
             case "HIGH_VOLUME" -> evaluateHighVolume(bar, (HighVolumeFilterParams) params, indicators);
             case "PATTERN" -> evaluatePattern(bar, indicators);
+            case "MA_CROSSOVER" -> evaluateMovingAverage(bar, previousBar,
+                    (MovingAverageFilterParams) params, indicators);
             default -> throw new IllegalArgumentException("Unknown filter type: " + type);
         };
     }
@@ -268,5 +285,32 @@ public class BacktestEngine {
     private boolean evaluatePattern(Candlestick bar, IndicatorContext indicators) {
         return indicators.patternTimestamps() != null
                 && indicators.patternTimestamps().contains(bar.getTimestamp());
+    }
+
+    private boolean evaluateMovingAverage(Candlestick bar, Candlestick previousBar,
+                                          MovingAverageFilterParams params, IndicatorContext indicators) {
+        String key = params.getMaType() + "_" + params.getPeriod();
+        Map<Long, Double> maMap = indicators.maValues() != null
+                ? indicators.maValues().get(key) : null;
+        if (maMap == null) return false;
+
+        Double maValue = maMap.get(bar.getTimestamp());
+        if (maValue == null) return false;
+
+        return switch (params.getCondition()) {
+            case "price_above_ma" -> bar.getClose() > maValue;
+            case "price_below_ma" -> bar.getClose() < maValue;
+            case "price_crosses_above_ma" -> {
+                if (previousBar == null) yield false;
+                Double prevMa = maMap.get(previousBar.getTimestamp());
+                yield prevMa != null && previousBar.getClose() <= prevMa && bar.getClose() > maValue;
+            }
+            case "price_crosses_below_ma" -> {
+                if (previousBar == null) yield false;
+                Double prevMa = maMap.get(previousBar.getTimestamp());
+                yield prevMa != null && previousBar.getClose() >= prevMa && bar.getClose() < maValue;
+            }
+            default -> throw new IllegalArgumentException("Unknown MA condition: " + params.getCondition());
+        };
     }
 }

@@ -8,6 +8,7 @@ import com.joakimcolloz.stocker.analysis.backtest.engine.IndicatorContext;
 import com.joakimcolloz.stocker.analysis.dto.filter.FilterRequest;
 import com.joakimcolloz.stocker.analysis.dto.filter.HighVolumeFilterParams;
 import com.joakimcolloz.stocker.analysis.dto.filter.MacdFilterParams;
+import com.joakimcolloz.stocker.analysis.dto.filter.MovingAverageFilterParams;
 import com.joakimcolloz.stocker.analysis.dto.filter.PatternFilterParams;
 import com.joakimcolloz.stocker.analysis.dto.filter.RsiFilterParams;
 import com.joakimcolloz.stocker.analysis.indicator.MacdCalculator.MacdValues;
@@ -71,6 +72,13 @@ class BacktestEngineTest {
         return filter;
     }
 
+    private FilterRequest maFilter(int period, String maType, String condition) {
+        FilterRequest filter = new FilterRequest();
+        filter.setType("MA_CROSSOVER");
+        filter.setParams(new MovingAverageFilterParams(period, maType, condition));
+        return filter;
+    }
+
     @Nested
     @DisplayName("RSI Entry + Take Profit Exit (NEXT_BAR_OPEN)")
     class RsiTakeProfit {
@@ -86,12 +94,12 @@ class BacktestEngineTest {
             );
 
             Map<Long, Double> rsiValues = Map.of(BASE_TS, 25.0, BASE_TS + DAY, 45.0);
-            IndicatorContext ctx = new IndicatorContext(rsiValues, null, 0, null);
+            IndicatorContext ctx = new IndicatorContext(rsiValues, null, 0, null, null);
 
             ExitRule exitRule = new ExitRule(null, 15.0, null);
 
             List<Trade> trades = engine.runForSymbol(
-                    "TEST.ST", candles, BASE_TS, List.of(rsiFilter(30, "below")), exitRule, ctx, NEXT_BAR_OPEN);
+                    "TEST.ST", candles, BASE_TS, List.of(rsiFilter(30, "below")), exitRule, null, ctx, NEXT_BAR_OPEN);
 
             assertEquals(1, trades.size());
             Trade trade = trades.getFirst();
@@ -126,11 +134,11 @@ class BacktestEngineTest {
                     BASE_TS + DAY, new MacdValues(0.8, 0.9, -0.1)
             );
 
-            IndicatorContext ctx = new IndicatorContext(null, macdValues, 0, null);
+            IndicatorContext ctx = new IndicatorContext(null, macdValues, 0, null, null);
             ExitRule exitRule = new ExitRule(5.0, null, null);
 
             List<Trade> trades = engine.runForSymbol(
-                    "TEST.ST", candles, BASE_TS, List.of(macdFilter("crossover_above")), exitRule, ctx, NEXT_BAR_OPEN);
+                    "TEST.ST", candles, BASE_TS, List.of(macdFilter("crossover_above")), exitRule, null, ctx, NEXT_BAR_OPEN);
 
             assertEquals(1, trades.size());
             Trade trade = trades.getFirst();
@@ -167,7 +175,7 @@ class BacktestEngineTest {
                     BASE_TS + 2 * DAY, new MacdValues(1.5, 1.0, 0.5)
             );
 
-            IndicatorContext ctx = new IndicatorContext(rsiValues, macdValues, 1000.0, null);
+            IndicatorContext ctx = new IndicatorContext(rsiValues, macdValues, 1000.0, null, null);
             ExitRule exitRule = new ExitRule(null, 10.0, null);
 
             List<FilterRequest> conditions = List.of(
@@ -177,7 +185,7 @@ class BacktestEngineTest {
             );
 
             List<Trade> trades = engine.runForSymbol(
-                    "TEST.ST", candles, BASE_TS, conditions, exitRule, ctx, NEXT_BAR_OPEN);
+                    "TEST.ST", candles, BASE_TS, conditions, exitRule, null, ctx, NEXT_BAR_OPEN);
 
             assertEquals(1, trades.size());
             Trade trade = trades.getFirst();
@@ -198,7 +206,7 @@ class BacktestEngineTest {
                     BASE_TS, new MacdValues(-1.0, 0.5, -1.5)
             );
 
-            IndicatorContext ctx = new IndicatorContext(rsiValues, macdValues, 1000.0, null);
+            IndicatorContext ctx = new IndicatorContext(rsiValues, macdValues, 1000.0, null, null);
             ExitRule exitRule = new ExitRule(5.0, 10.0, null);
 
             List<FilterRequest> conditions = List.of(
@@ -208,7 +216,7 @@ class BacktestEngineTest {
             );
 
             List<Trade> trades = engine.runForSymbol(
-                    "TEST.ST", candles, BASE_TS, conditions, exitRule, ctx, NEXT_BAR_OPEN);
+                    "TEST.ST", candles, BASE_TS, conditions, exitRule, null, ctx, NEXT_BAR_OPEN);
 
             assertTrue(trades.isEmpty());
         }
@@ -238,11 +246,11 @@ class BacktestEngineTest {
             rsiValues.put(BASE_TS + 3 * DAY, 55.0);
             rsiValues.put(BASE_TS + 4 * DAY, 60.0);
 
-            IndicatorContext ctx = new IndicatorContext(rsiValues, null, 0, null);
+            IndicatorContext ctx = new IndicatorContext(rsiValues, null, 0, null, null);
             ExitRule exitRule = new ExitRule(null, null, 3);
 
             List<Trade> trades = engine.runForSymbol(
-                    "TEST.ST", candles, BASE_TS, List.of(rsiFilter(30, "below")), exitRule, ctx, NEXT_BAR_OPEN);
+                    "TEST.ST", candles, BASE_TS, List.of(rsiFilter(30, "below")), exitRule, null, ctx, NEXT_BAR_OPEN);
 
             assertEquals(1, trades.size());
             Trade trade = trades.getFirst();
@@ -266,11 +274,11 @@ class BacktestEngineTest {
             );
 
             Map<Long, Double> rsiValues = Map.of(BASE_TS, 55.0, BASE_TS + DAY, 60.0);
-            IndicatorContext ctx = new IndicatorContext(rsiValues, null, 0, null);
+            IndicatorContext ctx = new IndicatorContext(rsiValues, null, 0, null, null);
             ExitRule exitRule = new ExitRule(5.0, 10.0, null);
 
             List<Trade> trades = engine.runForSymbol(
-                    "TEST.ST", candles, BASE_TS, List.of(rsiFilter(30, "below")), exitRule, ctx, NEXT_BAR_OPEN);
+                    "TEST.ST", candles, BASE_TS, List.of(rsiFilter(30, "below")), exitRule, null, ctx, NEXT_BAR_OPEN);
 
             assertTrue(trades.isEmpty());
         }
@@ -278,11 +286,11 @@ class BacktestEngineTest {
         @Test
         @DisplayName("Should produce no trades for empty candle list")
         void noTradesForEmptyCandles() {
-            IndicatorContext ctx = new IndicatorContext(null, null, 0, null);
+            IndicatorContext ctx = new IndicatorContext(null, null, 0, null, null);
             ExitRule exitRule = new ExitRule(5.0, 10.0, null);
 
             List<Trade> trades = engine.runForSymbol(
-                    "TEST.ST", List.of(), BASE_TS, List.of(rsiFilter(30, "below")), exitRule, ctx, NEXT_BAR_OPEN);
+                    "TEST.ST", List.of(), BASE_TS, List.of(rsiFilter(30, "below")), exitRule, null, ctx, NEXT_BAR_OPEN);
 
             assertTrue(trades.isEmpty());
         }
@@ -315,11 +323,11 @@ class BacktestEngineTest {
                     BASE_TS + 3 * DAY, 35.0
             );
 
-            IndicatorContext ctx = new IndicatorContext(rsiValues, null, 0, null);
+            IndicatorContext ctx = new IndicatorContext(rsiValues, null, 0, null, null);
             ExitRule exitRule = new ExitRule(5.0, 10.0, null);
 
             List<Trade> trades = engine.runForSymbol(
-                    "TEST.ST", candles, BASE_TS, List.of(rsiFilter(30, "below")), exitRule, ctx, NEXT_BAR_OPEN);
+                    "TEST.ST", candles, BASE_TS, List.of(rsiFilter(30, "below")), exitRule, null, ctx, NEXT_BAR_OPEN);
 
             assertEquals(2, trades.size());
 
@@ -351,11 +359,11 @@ class BacktestEngineTest {
             );
 
             Map<Long, Double> rsiValues = Map.of(BASE_TS, 25.0, BASE_TS + DAY, 40.0);
-            IndicatorContext ctx = new IndicatorContext(rsiValues, null, 0, null);
+            IndicatorContext ctx = new IndicatorContext(rsiValues, null, 0, null, null);
             ExitRule exitRule = new ExitRule(10.0, 20.0, null);
 
             List<Trade> trades = engine.runForSymbol(
-                    "TEST.ST", candles, BASE_TS, List.of(rsiFilter(30, "below")), exitRule, ctx, NEXT_BAR_OPEN);
+                    "TEST.ST", candles, BASE_TS, List.of(rsiFilter(30, "below")), exitRule, null, ctx, NEXT_BAR_OPEN);
 
             assertEquals(1, trades.size());
             Trade trade = trades.getFirst();
@@ -382,11 +390,11 @@ class BacktestEngineTest {
             );
 
             Map<Long, Double> rsiValues = Map.of(BASE_TS, 25.0, BASE_TS + DAY, 40.0, BASE_TS + 2 * DAY, 42.0);
-            IndicatorContext ctx = new IndicatorContext(rsiValues, null, 0, null);
+            IndicatorContext ctx = new IndicatorContext(rsiValues, null, 0, null, null);
             ExitRule exitRule = new ExitRule(5.0, null, null);
 
             List<Trade> trades = engine.runForSymbol(
-                    "TEST.ST", candles, BASE_TS, List.of(rsiFilter(30, "below")), exitRule, ctx, NEXT_BAR_OPEN);
+                    "TEST.ST", candles, BASE_TS, List.of(rsiFilter(30, "below")), exitRule, null, ctx, NEXT_BAR_OPEN);
 
             assertEquals(1, trades.size());
             assertEquals("STOP_LOSS", trades.getFirst().exitReason());
@@ -406,11 +414,11 @@ class BacktestEngineTest {
             );
 
             Map<Long, Double> rsiValues = Map.of(BASE_TS, 25.0, BASE_TS + DAY, 50.0, BASE_TS + 2 * DAY, 55.0);
-            IndicatorContext ctx = new IndicatorContext(rsiValues, null, 0, null);
+            IndicatorContext ctx = new IndicatorContext(rsiValues, null, 0, null, null);
             ExitRule exitRule = new ExitRule(null, 10.0, null);
 
             List<Trade> trades = engine.runForSymbol(
-                    "TEST.ST", candles, BASE_TS, List.of(rsiFilter(30, "below")), exitRule, ctx, NEXT_BAR_OPEN);
+                    "TEST.ST", candles, BASE_TS, List.of(rsiFilter(30, "below")), exitRule, null, ctx, NEXT_BAR_OPEN);
 
             assertEquals(1, trades.size());
             assertEquals("TAKE_PROFIT", trades.getFirst().exitReason());
@@ -431,11 +439,11 @@ class BacktestEngineTest {
             );
 
             Map<Long, Double> rsiValues = Map.of(BASE_TS, 25.0, BASE_TS + DAY, 55.0);
-            IndicatorContext ctx = new IndicatorContext(rsiValues, null, 0, null);
+            IndicatorContext ctx = new IndicatorContext(rsiValues, null, 0, null, null);
             ExitRule exitRule = new ExitRule(5.0, 15.0, null);
 
             List<Trade> trades = engine.runForSymbol(
-                    "TEST.ST", candles, BASE_TS + DAY, List.of(rsiFilter(30, "below")), exitRule, ctx, NEXT_BAR_OPEN);
+                    "TEST.ST", candles, BASE_TS + DAY, List.of(rsiFilter(30, "below")), exitRule, null, ctx, NEXT_BAR_OPEN);
 
             assertTrue(trades.isEmpty());
         }
@@ -456,11 +464,11 @@ class BacktestEngineTest {
             );
 
             Set<Long> patternTimestamps = Set.of(BASE_TS);
-            IndicatorContext ctx = new IndicatorContext(null, null, 0, patternTimestamps);
+            IndicatorContext ctx = new IndicatorContext(null, null, 0, patternTimestamps, null);
             ExitRule exitRule = new ExitRule(null, 10.0, null);
 
             List<Trade> trades = engine.runForSymbol(
-                    "TEST.ST", candles, BASE_TS, List.of(patternFilter()), exitRule, ctx, NEXT_BAR_OPEN);
+                    "TEST.ST", candles, BASE_TS, List.of(patternFilter()), exitRule, null, ctx, NEXT_BAR_OPEN);
 
             assertEquals(1, trades.size());
             Trade trade = trades.getFirst();
@@ -479,11 +487,11 @@ class BacktestEngineTest {
             );
 
             Set<Long> patternTimestamps = Set.of(BASE_TS + 5 * DAY);
-            IndicatorContext ctx = new IndicatorContext(null, null, 0, patternTimestamps);
+            IndicatorContext ctx = new IndicatorContext(null, null, 0, patternTimestamps, null);
             ExitRule exitRule = new ExitRule(5.0, 10.0, null);
 
             List<Trade> trades = engine.runForSymbol(
-                    "TEST.ST", candles, BASE_TS, List.of(patternFilter()), exitRule, ctx, NEXT_BAR_OPEN);
+                    "TEST.ST", candles, BASE_TS, List.of(patternFilter()), exitRule, null, ctx, NEXT_BAR_OPEN);
 
             assertTrue(trades.isEmpty());
         }
@@ -506,13 +514,13 @@ class BacktestEngineTest {
                     BASE_TS + 2 * DAY, 28.0
             );
             Set<Long> patternTimestamps = Set.of(BASE_TS, BASE_TS + DAY);
-            IndicatorContext ctx = new IndicatorContext(rsiValues, null, 0, patternTimestamps);
+            IndicatorContext ctx = new IndicatorContext(rsiValues, null, 0, patternTimestamps, null);
             ExitRule exitRule = new ExitRule(5.0, 10.0, null);
 
             List<FilterRequest> conditions = List.of(patternFilter(), rsiFilter(30, "below"));
 
             List<Trade> trades = engine.runForSymbol(
-                    "TEST.ST", candles, BASE_TS, conditions, exitRule, ctx, NEXT_BAR_OPEN);
+                    "TEST.ST", candles, BASE_TS, conditions, exitRule, null, ctx, NEXT_BAR_OPEN);
 
             assertEquals(1, trades.size());
             Trade trade = trades.getFirst();
@@ -537,11 +545,11 @@ class BacktestEngineTest {
             );
 
             Map<Long, Double> rsiValues = Map.of(BASE_TS, 25.0, BASE_TS + DAY, 50.0);
-            IndicatorContext ctx = new IndicatorContext(rsiValues, null, 0, null);
+            IndicatorContext ctx = new IndicatorContext(rsiValues, null, 0, null, null);
             ExitRule exitRule = new ExitRule(null, 10.0, null);
 
             List<Trade> trades = engine.runForSymbol(
-                    "TEST.ST", candles, BASE_TS, List.of(rsiFilter(30, "below")), exitRule, ctx, NEXT_BAR_OPEN);
+                    "TEST.ST", candles, BASE_TS, List.of(rsiFilter(30, "below")), exitRule, null, ctx, NEXT_BAR_OPEN);
 
             assertEquals(1, trades.size());
             Trade trade = trades.getFirst();
@@ -559,11 +567,11 @@ class BacktestEngineTest {
             );
 
             Map<Long, Double> rsiValues = Map.of(BASE_TS, 25.0);
-            IndicatorContext ctx = new IndicatorContext(rsiValues, null, 0, null);
+            IndicatorContext ctx = new IndicatorContext(rsiValues, null, 0, null, null);
             ExitRule exitRule = new ExitRule(5.0, 10.0, null);
 
             List<Trade> trades = engine.runForSymbol(
-                    "TEST.ST", candles, BASE_TS, List.of(rsiFilter(30, "below")), exitRule, ctx, NEXT_BAR_OPEN);
+                    "TEST.ST", candles, BASE_TS, List.of(rsiFilter(30, "below")), exitRule, null, ctx, NEXT_BAR_OPEN);
 
             // Pending order dropped at end of data
             assertTrue(trades.isEmpty());
@@ -587,11 +595,11 @@ class BacktestEngineTest {
                     BASE_TS + 2 * DAY, 50.0
             );
 
-            IndicatorContext ctx = new IndicatorContext(rsiValues, null, 0, null);
+            IndicatorContext ctx = new IndicatorContext(rsiValues, null, 0, null, null);
             ExitRule exitRule = new ExitRule(5.0, 5.0, null);
 
             List<Trade> trades = engine.runForSymbol(
-                    "TEST.ST", candles, BASE_TS, List.of(rsiFilter(30, "below")), exitRule, ctx, NEXT_BAR_OPEN);
+                    "TEST.ST", candles, BASE_TS, List.of(rsiFilter(30, "below")), exitRule, null, ctx, NEXT_BAR_OPEN);
 
             assertEquals(2, trades.size());
 
@@ -624,11 +632,11 @@ class BacktestEngineTest {
             );
 
             Map<Long, Double> rsiValues = Map.of(BASE_TS, 25.0, BASE_TS + DAY, 40.0, BASE_TS + 2 * DAY, 55.0);
-            IndicatorContext ctx = new IndicatorContext(rsiValues, null, 0, null);
+            IndicatorContext ctx = new IndicatorContext(rsiValues, null, 0, null, null);
             ExitRule exitRule = new ExitRule(5.0, 10.0, null);
 
             List<Trade> trades = engine.runForSymbol(
-                    "TEST.ST", candles, BASE_TS, List.of(rsiFilter(30, "below")), exitRule, ctx, limitOrder);
+                    "TEST.ST", candles, BASE_TS, List.of(rsiFilter(30, "below")), exitRule, null, ctx, limitOrder);
 
             assertEquals(1, trades.size());
             Trade trade = trades.getFirst();
@@ -652,11 +660,11 @@ class BacktestEngineTest {
             );
 
             Map<Long, Double> rsiValues = Map.of(BASE_TS, 25.0, BASE_TS + DAY, 50.0, BASE_TS + 2 * DAY, 50.0);
-            IndicatorContext ctx = new IndicatorContext(rsiValues, null, 0, null);
+            IndicatorContext ctx = new IndicatorContext(rsiValues, null, 0, null, null);
             ExitRule exitRule = new ExitRule(5.0, 10.0, null);
 
             List<Trade> trades = engine.runForSymbol(
-                    "TEST.ST", candles, BASE_TS, List.of(rsiFilter(30, "below")), exitRule, ctx, limitOrder);
+                    "TEST.ST", candles, BASE_TS, List.of(rsiFilter(30, "below")), exitRule, null, ctx, limitOrder);
 
             assertTrue(trades.isEmpty());
         }
@@ -674,11 +682,11 @@ class BacktestEngineTest {
             );
 
             Map<Long, Double> rsiValues = Map.of(BASE_TS, 25.0, BASE_TS + DAY, 50.0);
-            IndicatorContext ctx = new IndicatorContext(rsiValues, null, 0, null);
+            IndicatorContext ctx = new IndicatorContext(rsiValues, null, 0, null, null);
             ExitRule exitRule = new ExitRule(10.0, 20.0, null);
 
             List<Trade> trades = engine.runForSymbol(
-                    "TEST.ST", candles, BASE_TS, List.of(rsiFilter(30, "below")), exitRule, ctx, limitOrder);
+                    "TEST.ST", candles, BASE_TS, List.of(rsiFilter(30, "below")), exitRule, null, ctx, limitOrder);
 
             assertEquals(1, trades.size());
             assertEquals(100.0, trades.getFirst().entryPrice());
@@ -698,13 +706,13 @@ class BacktestEngineTest {
 
             Map<Long, Double> rsiValues = Map.of(BASE_TS, 25.0, BASE_TS + DAY, 50.0);
             Set<Long> patternTimestamps = Set.of(BASE_TS);
-            IndicatorContext ctx = new IndicatorContext(rsiValues, null, 0, patternTimestamps);
+            IndicatorContext ctx = new IndicatorContext(rsiValues, null, 0, patternTimestamps, null);
             ExitRule exitRule = new ExitRule(5.0, 10.0, null);
 
             List<FilterRequest> conditions = List.of(patternFilter(), rsiFilter(30, "below"));
 
             List<Trade> trades = engine.runForSymbol(
-                    "TEST.ST", candles, BASE_TS, conditions, exitRule, ctx, limitOrder);
+                    "TEST.ST", candles, BASE_TS, conditions, exitRule, null, ctx, limitOrder);
 
             assertEquals(1, trades.size());
             Trade trade = trades.getFirst();
@@ -727,11 +735,11 @@ class BacktestEngineTest {
             );
 
             Map<Long, Double> rsiValues = Map.of(BASE_TS, 25.0, BASE_TS + DAY, 28.0, BASE_TS + 2 * DAY, 29.0);
-            IndicatorContext ctx = new IndicatorContext(rsiValues, null, 0, null);
+            IndicatorContext ctx = new IndicatorContext(rsiValues, null, 0, null, null);
             ExitRule exitRule = new ExitRule(10.0, 20.0, null);
 
             List<Trade> trades = engine.runForSymbol(
-                    "TEST.ST", candles, BASE_TS, List.of(rsiFilter(30, "below")), exitRule, ctx, limitOrder);
+                    "TEST.ST", candles, BASE_TS, List.of(rsiFilter(30, "below")), exitRule, null, ctx, limitOrder);
 
             // Only one trade from the original signal, not from bar 1's RSI
             assertEquals(1, trades.size());
@@ -753,15 +761,297 @@ class BacktestEngineTest {
             );
 
             Map<Long, Double> rsiValues = Map.of(BASE_TS, 25.0, BASE_TS + DAY, 40.0, BASE_TS + 2 * DAY, 50.0);
-            IndicatorContext ctx = new IndicatorContext(rsiValues, null, 0, null);
+            IndicatorContext ctx = new IndicatorContext(rsiValues, null, 0, null, null);
             ExitRule exitRule = new ExitRule(10.0, 20.0, null);
 
             List<Trade> trades = engine.runForSymbol(
-                    "TEST.ST", candles, BASE_TS, List.of(rsiFilter(30, "below")), exitRule, ctx, limitOrder);
+                    "TEST.ST", candles, BASE_TS, List.of(rsiFilter(30, "below")), exitRule, null, ctx, limitOrder);
 
             assertEquals(1, trades.size());
             assertEquals(98.0, trades.getFirst().entryPrice());
             assertEquals(BASE_TS + 2 * DAY, trades.getFirst().entryTimestamp());
+        }
+    }
+
+    @Nested
+    @DisplayName("Moving Average Entry (NEXT_BAR_OPEN)")
+    class MovingAverageEntry {
+
+        @Test
+        @DisplayName("Should enter when close > SMA_3 (price_above_ma)")
+        void priceAboveMa() {
+            // Bar 0: close=100, SMA_3=90 → close > MA, signal fires
+            // Bar 1: entry at open=101, TP at 101*1.10=111.1, high=112 → triggers TP
+            List<Candlestick> candles = List.of(
+                    candle(BASE_TS, 98, 102, 95, 100, 1000),
+                    candle(BASE_TS + DAY, 101, 112, 99, 108, 1000)
+            );
+
+            Map<Long, Double> sma3 = Map.of(BASE_TS, 90.0, BASE_TS + DAY, 95.0);
+            Map<String, Map<Long, Double>> maValues = Map.of("SMA_3", sma3);
+            IndicatorContext ctx = new IndicatorContext(null, null, 0, null, maValues);
+            ExitRule exitRule = new ExitRule(null, 10.0, null);
+
+            List<Trade> trades = engine.runForSymbol(
+                    "TEST.ST", candles, BASE_TS,
+                    List.of(maFilter(3, "SMA", "price_above_ma")),
+                    exitRule, null, ctx, NEXT_BAR_OPEN);
+
+            assertEquals(1, trades.size());
+            Trade trade = trades.getFirst();
+            assertEquals(101.0, trade.entryPrice());
+            assertEquals("TAKE_PROFIT", trade.exitReason());
+        }
+
+        @Test
+        @DisplayName("Should enter on price_crosses_above_ma")
+        void priceCrossesAboveMa() {
+            // Bar 0: close=90, SMA_3=95 → close <= MA (below)
+            // Bar 1: close=100, SMA_3=92 → prev close <= prevMA AND current close > MA → cross above
+            // Bar 2: entry at open=101, TP at 101*1.10=111.1, high=112 → triggers TP
+            List<Candlestick> candles = List.of(
+                    candle(BASE_TS, 88, 92, 85, 90, 1000),
+                    candle(BASE_TS + DAY, 92, 102, 90, 100, 1000),
+                    candle(BASE_TS + 2 * DAY, 101, 112, 99, 108, 1000)
+            );
+
+            Map<Long, Double> sma3 = Map.of(
+                    BASE_TS, 95.0,
+                    BASE_TS + DAY, 92.0,
+                    BASE_TS + 2 * DAY, 96.0
+            );
+            Map<String, Map<Long, Double>> maValues = Map.of("SMA_3", sma3);
+            IndicatorContext ctx = new IndicatorContext(null, null, 0, null, maValues);
+            ExitRule exitRule = new ExitRule(null, 10.0, null);
+
+            List<Trade> trades = engine.runForSymbol(
+                    "TEST.ST", candles, BASE_TS,
+                    List.of(maFilter(3, "SMA", "price_crosses_above_ma")),
+                    exitRule, null, ctx, NEXT_BAR_OPEN);
+
+            assertEquals(1, trades.size());
+            assertEquals(101.0, trades.getFirst().entryPrice());
+            assertEquals("TAKE_PROFIT", trades.getFirst().exitReason());
+        }
+
+        @Test
+        @DisplayName("No cross → no entry for price_crosses_below_ma")
+        void noCrossBelowNoEntry() {
+            // Both bars: close > MA → no downward cross
+            List<Candlestick> candles = List.of(
+                    candle(BASE_TS, 98, 102, 95, 100, 1000),
+                    candle(BASE_TS + DAY, 99, 103, 96, 101, 1000)
+            );
+
+            Map<Long, Double> sma3 = Map.of(BASE_TS, 90.0, BASE_TS + DAY, 92.0);
+            Map<String, Map<Long, Double>> maValues = Map.of("SMA_3", sma3);
+            IndicatorContext ctx = new IndicatorContext(null, null, 0, null, maValues);
+            ExitRule exitRule = new ExitRule(5.0, 10.0, null);
+
+            List<Trade> trades = engine.runForSymbol(
+                    "TEST.ST", candles, BASE_TS,
+                    List.of(maFilter(3, "SMA", "price_crosses_below_ma")),
+                    exitRule, null, ctx, NEXT_BAR_OPEN);
+
+            assertTrue(trades.isEmpty());
+        }
+
+        @Test
+        @DisplayName("Combined MA + RSI: both must be met")
+        void combinedMaAndRsi() {
+            // Bar 0: close=100, MA=90 (above), RSI=25 (<30) → both met, signal
+            // Bar 1: entry at open=101
+            List<Candlestick> candles = List.of(
+                    candle(BASE_TS, 98, 102, 95, 100, 1000),
+                    candle(BASE_TS + DAY, 101, 112, 99, 108, 1000)
+            );
+
+            Map<Long, Double> rsiValues = Map.of(BASE_TS, 25.0, BASE_TS + DAY, 50.0);
+            Map<Long, Double> sma3 = Map.of(BASE_TS, 90.0, BASE_TS + DAY, 95.0);
+            Map<String, Map<Long, Double>> maValues = Map.of("SMA_3", sma3);
+            IndicatorContext ctx = new IndicatorContext(rsiValues, null, 0, null, maValues);
+            ExitRule exitRule = new ExitRule(null, 10.0, null);
+
+            List<FilterRequest> conditions = List.of(
+                    maFilter(3, "SMA", "price_above_ma"),
+                    rsiFilter(30, "below")
+            );
+
+            List<Trade> trades = engine.runForSymbol(
+                    "TEST.ST", candles, BASE_TS, conditions, exitRule, null, ctx, NEXT_BAR_OPEN);
+
+            assertEquals(1, trades.size());
+            assertEquals(101.0, trades.getFirst().entryPrice());
+            assertEquals("TAKE_PROFIT", trades.getFirst().exitReason());
+        }
+    }
+
+    @Nested
+    @DisplayName("Indicator Exit Conditions")
+    class IndicatorExitConditions {
+
+        @Test
+        @DisplayName("RSI exit: enter on RSI<30, exit when RSI>70 (before max holding days)")
+        void rsiExit() {
+            // Bar 0: RSI=25 → entry signal
+            // Bar 1: entry at open=101. RSI=50, no exit.
+            // Bar 2: RSI=75 (>70) → indicator exit
+            List<Candlestick> candles = List.of(
+                    candle(BASE_TS, 98, 102, 95, 100, 1000),
+                    candle(BASE_TS + DAY, 101, 104, 99, 103, 1000),
+                    candle(BASE_TS + 2 * DAY, 103, 106, 101, 105, 1000)
+            );
+
+            Map<Long, Double> rsiValues = Map.of(
+                    BASE_TS, 25.0,
+                    BASE_TS + DAY, 50.0,
+                    BASE_TS + 2 * DAY, 75.0
+            );
+            IndicatorContext ctx = new IndicatorContext(rsiValues, null, 0, null, null);
+            ExitRule exitRule = new ExitRule(null, null, 10);
+
+            List<FilterRequest> exitConditions = List.of(rsiFilter(70, "above"));
+
+            List<Trade> trades = engine.runForSymbol(
+                    "TEST.ST", candles, BASE_TS,
+                    List.of(rsiFilter(30, "below")),
+                    exitRule, exitConditions, ctx, NEXT_BAR_OPEN);
+
+            assertEquals(1, trades.size());
+            Trade trade = trades.getFirst();
+            assertEquals(101.0, trade.entryPrice());
+            assertEquals("RSI_EXIT", trade.exitReason());
+            assertEquals(105.0, trade.exitPrice());
+            assertEquals(BASE_TS + 2 * DAY, trade.exitTimestamp());
+        }
+
+        @Test
+        @DisplayName("MA exit: enter on RSI<30, exit when price_crosses_below_ma")
+        void maExit() {
+            // Bar 0: RSI=25 → entry signal
+            // Bar 1: entry at open=101. close=103, MA=95 → close > MA, no cross below
+            // Bar 2: close=88, MA=100, prev close=103 >= prevMA=95 → cross below → exit
+            List<Candlestick> candles = List.of(
+                    candle(BASE_TS, 98, 102, 95, 100, 1000),
+                    candle(BASE_TS + DAY, 101, 104, 99, 103, 1000),
+                    candle(BASE_TS + 2 * DAY, 100, 101, 85, 88, 1000)
+            );
+
+            Map<Long, Double> rsiValues = Map.of(
+                    BASE_TS, 25.0,
+                    BASE_TS + DAY, 50.0,
+                    BASE_TS + 2 * DAY, 40.0
+            );
+            Map<Long, Double> sma5 = Map.of(
+                    BASE_TS, 92.0,
+                    BASE_TS + DAY, 95.0,
+                    BASE_TS + 2 * DAY, 100.0
+            );
+            Map<String, Map<Long, Double>> maValues = Map.of("SMA_5", sma5);
+            IndicatorContext ctx = new IndicatorContext(rsiValues, null, 0, null, maValues);
+            ExitRule exitRule = new ExitRule(null, null, 10);
+
+            List<FilterRequest> exitConditions = List.of(
+                    maFilter(5, "SMA", "price_crosses_below_ma"));
+
+            List<Trade> trades = engine.runForSymbol(
+                    "TEST.ST", candles, BASE_TS,
+                    List.of(rsiFilter(30, "below")),
+                    exitRule, exitConditions, ctx, NEXT_BAR_OPEN);
+
+            assertEquals(1, trades.size());
+            Trade trade = trades.getFirst();
+            assertEquals("MA_CROSSOVER_EXIT", trade.exitReason());
+            assertEquals(88.0, trade.exitPrice());
+        }
+
+        @Test
+        @DisplayName("Stop-loss priority: stop-loss triggers before indicator exit on same bar")
+        void stopLossPriorityOverIndicatorExit() {
+            // Bar 0: RSI=25 → entry signal
+            // Bar 1: entry at open=100. low=90 triggers stop at 100*0.95=95.
+            //         RSI=75 would also trigger exit, but stop-loss has priority.
+            List<Candlestick> candles = List.of(
+                    candle(BASE_TS, 98, 102, 95, 100, 1000),
+                    candle(BASE_TS + DAY, 100, 104, 90, 92, 1000)
+            );
+
+            Map<Long, Double> rsiValues = Map.of(BASE_TS, 25.0, BASE_TS + DAY, 75.0);
+            IndicatorContext ctx = new IndicatorContext(rsiValues, null, 0, null, null);
+            ExitRule exitRule = new ExitRule(5.0, null, null);
+
+            List<FilterRequest> exitConditions = List.of(rsiFilter(70, "above"));
+
+            List<Trade> trades = engine.runForSymbol(
+                    "TEST.ST", candles, BASE_TS,
+                    List.of(rsiFilter(30, "below")),
+                    exitRule, exitConditions, ctx, NEXT_BAR_OPEN);
+
+            assertEquals(1, trades.size());
+            assertEquals("STOP_LOSS", trades.getFirst().exitReason());
+        }
+
+        @Test
+        @DisplayName("Multiple exit conditions (OR logic): first matching condition wins")
+        void multipleExitConditionsOrLogic() {
+            // Bar 0: RSI=25 → entry signal
+            // Bar 1: entry at open=101. RSI=50, close=103 > MA=95 → no exit
+            // Bar 2: RSI=75 (>70) → RSI exit triggers first (checked before MA)
+            List<Candlestick> candles = List.of(
+                    candle(BASE_TS, 98, 102, 95, 100, 1000),
+                    candle(BASE_TS + DAY, 101, 104, 99, 103, 1000),
+                    candle(BASE_TS + 2 * DAY, 103, 106, 101, 105, 1000)
+            );
+
+            Map<Long, Double> rsiValues = Map.of(
+                    BASE_TS, 25.0,
+                    BASE_TS + DAY, 50.0,
+                    BASE_TS + 2 * DAY, 75.0
+            );
+            Map<Long, Double> sma5 = Map.of(
+                    BASE_TS, 92.0,
+                    BASE_TS + DAY, 95.0,
+                    BASE_TS + 2 * DAY, 98.0
+            );
+            Map<String, Map<Long, Double>> maValues = Map.of("SMA_5", sma5);
+            IndicatorContext ctx = new IndicatorContext(rsiValues, null, 0, null, maValues);
+            ExitRule exitRule = new ExitRule(null, null, 10);
+
+            List<FilterRequest> exitConditions = List.of(
+                    rsiFilter(70, "above"),
+                    maFilter(5, "SMA", "price_crosses_below_ma")
+            );
+
+            List<Trade> trades = engine.runForSymbol(
+                    "TEST.ST", candles, BASE_TS,
+                    List.of(rsiFilter(30, "below")),
+                    exitRule, exitConditions, ctx, NEXT_BAR_OPEN);
+
+            assertEquals(1, trades.size());
+            assertEquals("RSI_EXIT", trades.getFirst().exitReason());
+        }
+
+        @Test
+        @DisplayName("No exit conditions (null): existing behavior unchanged")
+        void noExitConditionsNullBehaviorUnchanged() {
+            // Bar 0: RSI=25 → entry signal
+            // Bar 1: entry at open=101. TP at 101*1.10=111.1. high=112 → triggers TP.
+            List<Candlestick> candles = List.of(
+                    candle(BASE_TS, 98, 102, 95, 100, 1000),
+                    candle(BASE_TS + DAY, 101, 112, 99, 108, 1000)
+            );
+
+            Map<Long, Double> rsiValues = Map.of(BASE_TS, 25.0, BASE_TS + DAY, 50.0);
+            IndicatorContext ctx = new IndicatorContext(rsiValues, null, 0, null, null);
+            ExitRule exitRule = new ExitRule(null, 10.0, null);
+
+            List<Trade> trades = engine.runForSymbol(
+                    "TEST.ST", candles, BASE_TS,
+                    List.of(rsiFilter(30, "below")),
+                    exitRule, null, ctx, NEXT_BAR_OPEN);
+
+            assertEquals(1, trades.size());
+            assertEquals("TAKE_PROFIT", trades.getFirst().exitReason());
         }
     }
 }

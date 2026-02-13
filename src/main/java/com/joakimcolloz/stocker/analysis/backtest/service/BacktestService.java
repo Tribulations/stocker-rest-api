@@ -7,13 +7,13 @@ import com.joakimcolloz.stocker.analysis.backtest.dto.Trade;
 import com.joakimcolloz.stocker.analysis.backtest.engine.BacktestEngine;
 import com.joakimcolloz.stocker.analysis.backtest.engine.IndicatorContext;
 import com.joakimcolloz.stocker.analysis.dto.filter.FilterRequest;
-import com.joakimcolloz.stocker.analysis.dto.filter.HighVolumeFilterParams;
 import com.joakimcolloz.stocker.analysis.dto.filter.MacdFilterParams;
+import com.joakimcolloz.stocker.analysis.dto.filter.MovingAverageFilterParams;
 import com.joakimcolloz.stocker.analysis.dto.filter.PatternFilterParams;
-import com.joakimcolloz.stocker.analysis.dto.filter.RsiFilterParams;
 import com.joakimcolloz.stocker.analysis.filter.FilterRegistry;
 import com.joakimcolloz.stocker.analysis.indicator.MacdCalculator;
 import com.joakimcolloz.stocker.analysis.indicator.MacdCalculator.MacdValues;
+import com.joakimcolloz.stocker.analysis.indicator.MovingAverageCalculator;
 import com.joakimcolloz.stocker.analysis.indicator.RsiCalculator;
 import com.joakimcolloz.stocker.analysis.pattern.PatternDetector;
 import com.joakimcolloz.stocker.analysis.pattern.PatternRegistry;
@@ -23,6 +23,8 @@ import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -58,7 +60,9 @@ public class BacktestService {
 
     /** Executes the backtest described by the request and returns aggregated results. */
     public BacktestResult runBacktest(BacktestRequest request) {
-        long maxLookback = computeMaxLookback(request.getEntryConditions());
+        List<FilterRequest> allConditions = allConditions(request);
+
+        long maxLookback = computeMaxLookback(allConditions);
         long extendedStart = request.getStartTimestamp() - maxLookback;
 
         List<Candlestick> allCandles = fetchCandles(request.getSymbols(), extendedStart, request.getEndTimestamp());
@@ -66,10 +70,11 @@ public class BacktestService {
         Map<String, List<Candlestick>> bySymbol = allCandles.stream()
                 .collect(Collectors.groupingBy(Candlestick::getSymbol));
 
-        boolean needsRsi = needsIndicator(request.getEntryConditions(), "RSI");
-        boolean needsMacd = needsIndicator(request.getEntryConditions(), "MACD");
-        boolean needsVolume = needsIndicator(request.getEntryConditions(), "HIGH_VOLUME");
-        boolean needsPattern = needsIndicator(request.getEntryConditions(), "PATTERN");
+        boolean needsRsi = needsIndicator(allConditions, "RSI");
+        boolean needsMacd = needsIndicator(allConditions, "MACD");
+        boolean needsVolume = needsIndicator(allConditions, "HIGH_VOLUME");
+        boolean needsPattern = needsIndicator(allConditions, "PATTERN");
+        boolean needsMa = needsIndicator(allConditions, "MA_CROSSOVER");
 
         double startingCapital = request.getStartingCapital() != null
                 ? request.getStartingCapital() : DEFAULT_STARTING_CAPITAL;
@@ -86,11 +91,13 @@ public class BacktestService {
                     .toList();
 
             IndicatorContext indicators = buildIndicatorContext(
-                    sortedCandles, request.getEntryConditions(), needsRsi, needsMacd, needsVolume, needsPattern);
+                    sortedCandles, allConditions,
+                    needsRsi, needsMacd, needsVolume, needsPattern, needsMa);
 
             List<Trade> symbolTrades = engine.runForSymbol(
                     symbol, sortedCandles, request.getStartTimestamp(),
-                    request.getEntryConditions(), request.getExitRule(), indicators, entryRule);
+                    request.getEntryConditions(), request.getExitRule(),
+                    request.getExitConditions(), indicators, entryRule);
 
             allTrades.addAll(symbolTrades);
         }
@@ -101,9 +108,19 @@ public class BacktestService {
                 startingCapital);
     }
 
-    private long computeMaxLookback(List<FilterRequest> entryConditions) {
+    /** Combines entry + exit conditions, handling null exitConditions. */
+    private List<FilterRequest> allConditions(BacktestRequest request) {
+        if (request.getExitConditions() == null || request.getExitConditions().isEmpty()) {
+            return request.getEntryConditions();
+        }
+        List<FilterRequest> all = new ArrayList<>(request.getEntryConditions());
+        all.addAll(request.getExitConditions());
+        return all;
+    }
+
+    private long computeMaxLookback(List<FilterRequest> conditions) {
         long maxLookback = 0;
-        for (FilterRequest condition : entryConditions) {
+        for (FilterRequest condition : conditions) {
             long lookback = filterRegistry.getFilter(condition.getType()).lookbackSeconds();
             maxLookback = Math.max(maxLookback, lookback);
         }
@@ -128,23 +145,25 @@ public class BacktestService {
 
     private IndicatorContext buildIndicatorContext(
             List<Candlestick> sortedCandles,
-            List<FilterRequest> entryConditions,
+            List<FilterRequest> allConditions,
             boolean needsRsi,
             boolean needsMacd,
             boolean needsVolume,
-            boolean needsPattern
+            boolean needsPattern,
+            boolean needsMa
     ) {
         Map<Long, Double> rsiValues = null;
         Map<Long, MacdValues> macdValues = null;
         double avgVolume = 0;
         Set<Long> patternTimestamps = null;
+        Map<String, Map<Long, Double>> maValues = null;
 
         if (needsRsi) {
             rsiValues = RsiCalculator.calculateStableRsiByTimestamp(sortedCandles, DEFAULT_RSI_PERIOD);
         }
 
         if (needsMacd) {
-            MacdFilterParams macdParams = findMacdParams(entryConditions);
+            MacdFilterParams macdParams = findMacdParams(allConditions);
             int fast = macdParams != null && macdParams.getFastPeriod() != null
                     ? macdParams.getFastPeriod() : DEFAULT_FAST_PERIOD;
             int slow = macdParams != null && macdParams.getSlowPeriod() != null
@@ -162,7 +181,7 @@ public class BacktestService {
         }
 
         if (needsPattern) {
-            PatternFilterParams patternParams = findPatternParams(entryConditions);
+            PatternFilterParams patternParams = findPatternParams(allConditions);
             String patternCode = patternParams.getPattern();
             PatternDetector detector = patternRegistry.findDetector(patternCode)
                     .orElseThrow(() -> new IllegalArgumentException("Unknown pattern code: " + patternCode));
@@ -171,7 +190,37 @@ public class BacktestService {
                     .collect(Collectors.toSet());
         }
 
-        return new IndicatorContext(rsiValues, macdValues, avgVolume, patternTimestamps);
+        if (needsMa) {
+            maValues = buildMaValues(sortedCandles, allConditions);
+        }
+
+        return new IndicatorContext(rsiValues, macdValues, avgVolume, patternTimestamps, maValues);
+    }
+
+    /** Collects all unique (maType, period) pairs from MA_CROSSOVER conditions and computes each. */
+    private Map<String, Map<Long, Double>> buildMaValues(
+            List<Candlestick> sortedCandles,
+            List<FilterRequest> allConditions
+    ) {
+        // Collect unique (maType, period) pairs
+        Set<String> keys = new LinkedHashSet<>();
+        for (FilterRequest condition : allConditions) {
+            if ("MA_CROSSOVER".equals(condition.getType())) {
+                MovingAverageFilterParams maParams = (MovingAverageFilterParams) condition.getParams();
+                String key = maParams.getMaType() + "_" + maParams.getPeriod();
+                keys.add(key);
+            }
+        }
+
+        Map<String, Map<Long, Double>> result = new HashMap<>();
+        for (String key : keys) {
+            String[] parts = key.split("_", 2);
+            String maType = parts[0];
+            int period = Integer.parseInt(parts[1]);
+            Map<Long, Double> values = MovingAverageCalculator.calculateByTimestamp(sortedCandles, period, maType);
+            result.put(key, values);
+        }
+        return result;
     }
 
     private MacdFilterParams findMacdParams(List<FilterRequest> conditions) {

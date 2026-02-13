@@ -20,6 +20,7 @@ public class FilterRegistry {
 		map.put(FilterType.RSI, new RSIFilter());
 		map.put(FilterType.MACD, new MacdFilter());
 		map.put(FilterType.PATTERN, new PatternFilter(patternRegistry));
+		map.put(FilterType.MA_CROSSOVER, new MovingAverageFilter());
 		this.filters = Map.copyOf(map);
 	}
 
