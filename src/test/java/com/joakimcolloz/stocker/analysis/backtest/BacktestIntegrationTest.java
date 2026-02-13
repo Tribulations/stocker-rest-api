@@ -2,6 +2,7 @@ package com.joakimcolloz.stocker.analysis.backtest;
 
 import com.joakimcolloz.stocker.analysis.AbstractCombinedScanIntegrationTest;
 import com.joakimcolloz.stocker.analysis.backtest.dto.BacktestRequest;
+import com.joakimcolloz.stocker.analysis.backtest.dto.EntryRule;
 import com.joakimcolloz.stocker.analysis.backtest.dto.ExitRule;
 import com.joakimcolloz.stocker.api.entity.Candlestick;
 import org.junit.jupiter.api.BeforeEach;
@@ -137,7 +138,7 @@ public class BacktestIntegrationTest extends AbstractCombinedScanIntegrationTest
     class FullRoundtrip {
 
         @Test
-        @DisplayName("Should execute backtest and return result with trades")
+        @DisplayName("Should execute backtest and return result with trades and capital fields")
         void fullBacktestRoundtrip() throws Exception {
             insertBacktestData();
 
@@ -159,7 +160,31 @@ public class BacktestIntegrationTest extends AbstractCombinedScanIntegrationTest
                     .andExpect(jsonPath("$.startTimestamp").isNumber())
                     .andExpect(jsonPath("$.endTimestamp").isNumber())
                     .andExpect(jsonPath("$.averageHoldingDays").isNumber())
-                    .andExpect(jsonPath("$.maxDrawdownPercent").isNumber());
+                    .andExpect(jsonPath("$.maxDrawdownPercent").isNumber())
+                    .andExpect(jsonPath("$.startingCapital").value(10000.0))
+                    .andExpect(jsonPath("$.finalCapital").isNumber());
+        }
+
+        @Test
+        @DisplayName("Should use custom starting capital when provided")
+        void customStartingCapital() throws Exception {
+            insertBacktestData();
+
+            BacktestRequest request = new BacktestRequest();
+            request.setEntryConditions(List.of(createRSIFilter(50, "above")));
+            request.setExitRule(new ExitRule(5.0, 10.0, null));
+            request.setStartTimestamp(humanReadableToTimestamp("2024-01-15 00:00:00"));
+            request.setEndTimestamp(humanReadableToTimestamp("2024-02-05 23:59:59"));
+            request.setSymbols(List.of("ABB.ST"));
+            request.setStartingCapital(50_000.0);
+
+            mockMvc.perform(post("/api/analysis/backtest")
+                            .header("X-API-Key", "test-api-key")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(objectMapper.writeValueAsString(request)))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.startingCapital").value(50000.0))
+                    .andExpect(jsonPath("$.finalCapital").isNumber());
         }
 
         @Test
@@ -178,7 +203,9 @@ public class BacktestIntegrationTest extends AbstractCombinedScanIntegrationTest
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.totalTrades").value(0))
                     .andExpect(jsonPath("$.trades", hasSize(0)))
-                    .andExpect(jsonPath("$.winRate").value(0.0));
+                    .andExpect(jsonPath("$.winRate").value(0.0))
+                    .andExpect(jsonPath("$.startingCapital").value(10000.0))
+                    .andExpect(jsonPath("$.finalCapital").value(10000.0));
         }
 
         @Test
@@ -200,7 +227,9 @@ public class BacktestIntegrationTest extends AbstractCombinedScanIntegrationTest
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.totalTrades").value(greaterThanOrEqualTo(1)))
                     .andExpect(jsonPath("$.trades").isArray())
-                    .andExpect(jsonPath("$.trades", hasSize(greaterThanOrEqualTo(1))));
+                    .andExpect(jsonPath("$.trades", hasSize(greaterThanOrEqualTo(1))))
+                    .andExpect(jsonPath("$.startingCapital").isNumber())
+                    .andExpect(jsonPath("$.finalCapital").isNumber());
         }
 
         @Test
@@ -220,6 +249,30 @@ public class BacktestIntegrationTest extends AbstractCombinedScanIntegrationTest
                             .content(objectMapper.writeValueAsString(request)))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.trades").isArray());
+        }
+
+        @Test
+        @DisplayName("Should execute backtest with LIMIT_ORDER entry mode")
+        void backtestWithLimitOrder() throws Exception {
+            insertBacktestData();
+
+            BacktestRequest request = new BacktestRequest();
+            request.setEntryConditions(List.of(createRSIFilter(50, "above")));
+            request.setExitRule(new ExitRule(5.0, 10.0, null));
+            request.setStartTimestamp(humanReadableToTimestamp("2024-01-15 00:00:00"));
+            request.setEndTimestamp(humanReadableToTimestamp("2024-02-05 23:59:59"));
+            request.setSymbols(List.of("ABB.ST"));
+            request.setEntryRule(new EntryRule("LIMIT_ORDER", 1.0, 0.0, 3));
+
+            mockMvc.perform(post("/api/analysis/backtest")
+                            .header("X-API-Key", "test-api-key")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(objectMapper.writeValueAsString(request)))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.totalTrades").isNumber())
+                    .andExpect(jsonPath("$.trades").isArray())
+                    .andExpect(jsonPath("$.startingCapital").value(10000.0))
+                    .andExpect(jsonPath("$.finalCapital").isNumber());
         }
     }
 

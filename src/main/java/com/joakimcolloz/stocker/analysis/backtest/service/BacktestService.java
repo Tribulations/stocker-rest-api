@@ -2,6 +2,7 @@ package com.joakimcolloz.stocker.analysis.backtest.service;
 
 import com.joakimcolloz.stocker.analysis.backtest.dto.BacktestRequest;
 import com.joakimcolloz.stocker.analysis.backtest.dto.BacktestResult;
+import com.joakimcolloz.stocker.analysis.backtest.dto.EntryRule;
 import com.joakimcolloz.stocker.analysis.backtest.dto.Trade;
 import com.joakimcolloz.stocker.analysis.backtest.engine.BacktestEngine;
 import com.joakimcolloz.stocker.analysis.backtest.engine.IndicatorContext;
@@ -53,6 +54,8 @@ public class BacktestService {
         this.patternRegistry = patternRegistry;
     }
 
+    private static final double DEFAULT_STARTING_CAPITAL = 10_000.0;
+
     /** Executes the backtest described by the request and returns aggregated results. */
     public BacktestResult runBacktest(BacktestRequest request) {
         long maxLookback = computeMaxLookback(request.getEntryConditions());
@@ -68,6 +71,12 @@ public class BacktestService {
         boolean needsVolume = needsIndicator(request.getEntryConditions(), "HIGH_VOLUME");
         boolean needsPattern = needsIndicator(request.getEntryConditions(), "PATTERN");
 
+        double startingCapital = request.getStartingCapital() != null
+                ? request.getStartingCapital() : DEFAULT_STARTING_CAPITAL;
+
+        EntryRule entryRule = request.getEntryRule() != null
+                ? request.getEntryRule() : new EntryRule("NEXT_BAR_OPEN", null, null, null);
+
         List<Trade> allTrades = new ArrayList<>();
 
         for (Map.Entry<String, List<Candlestick>> entry : bySymbol.entrySet()) {
@@ -81,14 +90,15 @@ public class BacktestService {
 
             List<Trade> symbolTrades = engine.runForSymbol(
                     symbol, sortedCandles, request.getStartTimestamp(),
-                    request.getEntryConditions(), request.getExitRule(), indicators);
+                    request.getEntryConditions(), request.getExitRule(), indicators, entryRule);
 
             allTrades.addAll(symbolTrades);
         }
 
         allTrades.sort(Comparator.comparingLong(Trade::entryTimestamp));
 
-        return BacktestResult.fromTrades(allTrades, request.getStartTimestamp(), request.getEndTimestamp());
+        return BacktestResult.fromTrades(allTrades, request.getStartTimestamp(), request.getEndTimestamp(),
+                startingCapital);
     }
 
     private long computeMaxLookback(List<FilterRequest> entryConditions) {
