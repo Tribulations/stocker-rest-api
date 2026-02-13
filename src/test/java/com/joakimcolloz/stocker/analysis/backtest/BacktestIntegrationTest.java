@@ -262,7 +262,7 @@ public class BacktestIntegrationTest extends AbstractCombinedScanIntegrationTest
             request.setStartTimestamp(humanReadableToTimestamp("2024-01-15 00:00:00"));
             request.setEndTimestamp(humanReadableToTimestamp("2024-02-05 23:59:59"));
             request.setSymbols(List.of("ABB.ST"));
-            request.setEntryRule(new EntryRule("LIMIT_ORDER", 1.0, 0.0, 3));
+            request.setEntryRule(new EntryRule("LIMIT_ORDER", 1.0, 0.0, 3, null));
 
             mockMvc.perform(post("/api/analysis/backtest")
                             .header("X-API-Key", "test-api-key")
@@ -414,6 +414,35 @@ public class BacktestIntegrationTest extends AbstractCombinedScanIntegrationTest
             request.setStartTimestamp(humanReadableToTimestamp("2024-01-15 00:00:00"));
             request.setEndTimestamp(humanReadableToTimestamp("2024-02-05 23:59:59"));
             request.setSymbols(List.of("ABB.ST"));
+
+            mockMvc.perform(post("/api/analysis/backtest")
+                            .header("X-API-Key", "test-api-key")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(objectMapper.writeValueAsString(request)))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.totalTrades").isNumber())
+                    .andExpect(jsonPath("$.trades").isArray())
+                    .andExpect(jsonPath("$.startingCapital").value(10000.0))
+                    .andExpect(jsonPath("$.finalCapital").isNumber());
+        }
+    }
+
+    @Nested
+    @DisplayName("Limit Order ABOVE Direction")
+    class LimitOrderAboveDirection {
+
+        @Test
+        @DisplayName("Should execute backtest with LIMIT_ORDER entry mode and ABOVE direction")
+        void backtestWithLimitOrderAbove() throws Exception {
+            insertBacktestData();
+
+            BacktestRequest request = new BacktestRequest();
+            request.setEntryConditions(List.of(createRSIFilter(50, "above")));
+            request.setExitRule(new ExitRule(5.0, 10.0, null, null));
+            request.setStartTimestamp(humanReadableToTimestamp("2024-01-15 00:00:00"));
+            request.setEndTimestamp(humanReadableToTimestamp("2024-02-05 23:59:59"));
+            request.setSymbols(List.of("ABB.ST"));
+            request.setEntryRule(new EntryRule("LIMIT_ORDER", 1.0, 0.0, 3, "ABOVE"));
 
             mockMvc.perform(post("/api/analysis/backtest")
                             .header("X-API-Key", "test-api-key")

@@ -35,13 +35,15 @@ public class BacktestEngine {
         final String symbol;
         final double limitPrice;
         final int signalBarIndex;
+        final String direction; // "ABOVE" or "BELOW"
         int barsRemaining;
 
-        PendingOrder(String symbol, double limitPrice, int signalBarIndex, int barsRemaining) {
+        PendingOrder(String symbol, double limitPrice, int signalBarIndex, int barsRemaining, String direction) {
             this.symbol = symbol;
             this.limitPrice = limitPrice;
             this.signalBarIndex = signalBarIndex;
             this.barsRemaining = barsRemaining;
+            this.direction = direction;
         }
     }
 
@@ -77,6 +79,7 @@ public class BacktestEngine {
         double limitOffsetPercent = entryRule.limitOffsetPercent() != null ? entryRule.limitOffsetPercent() : 0.0;
         double penetrationPercent = entryRule.penetrationPercent() != null ? entryRule.penetrationPercent() : 0.0;
         int maxBarsToFill = entryRule.maxBarsToFill() != null ? entryRule.maxBarsToFill() : 1;
+        String direction = entryRule.limitDirection() != null ? entryRule.limitDirection() : "BELOW";
 
         for (int i = 0; i < sortedCandles.size(); i++) {
             Candlestick bar = sortedCandles.get(i);
@@ -98,14 +101,23 @@ public class BacktestEngine {
                     position = new Position(symbol, bar.getTimestamp(), bar.getOpen());
                     pendingOrder = null;
                 } else { // LIMIT_ORDER
-                    double fillThreshold = pendingOrder.limitPrice * (1.0 - penetrationPercent / 100.0);
-                    if (bar.getLow() <= fillThreshold) {
-                        position = new Position(symbol, bar.getTimestamp(), pendingOrder.limitPrice);
-                        pendingOrder = null;
+                    if ("ABOVE".equals(pendingOrder.direction)) {
+                        double fillThreshold = pendingOrder.limitPrice * (1.0 + penetrationPercent / 100.0);
+                        if (bar.getHigh() >= fillThreshold) {
+                            position = new Position(symbol, bar.getTimestamp(), pendingOrder.limitPrice);
+                            pendingOrder = null;
+                        } else {
+                            pendingOrder.barsRemaining--;
+                            if (pendingOrder.barsRemaining <= 0) pendingOrder = null;
+                        }
                     } else {
-                        pendingOrder.barsRemaining--;
-                        if (pendingOrder.barsRemaining <= 0) {
-                            pendingOrder = null; // expired, no trade
+                        double fillThreshold = pendingOrder.limitPrice * (1.0 - penetrationPercent / 100.0);
+                        if (bar.getLow() <= fillThreshold) {
+                            position = new Position(symbol, bar.getTimestamp(), pendingOrder.limitPrice);
+                            pendingOrder = null;
+                        } else {
+                            pendingOrder.barsRemaining--;
+                            if (pendingOrder.barsRemaining <= 0) pendingOrder = null;
                         }
                     }
                 }
@@ -125,10 +137,15 @@ public class BacktestEngine {
             if (position == null && pendingOrder == null && bar.getTimestamp() >= tradingStartTimestamp) {
                 if (allEntryConditionsMet(bar, previousBar, entryConditions, indicators)) {
                     if ("NEXT_BAR_OPEN".equals(entryMode)) {
-                        pendingOrder = new PendingOrder(symbol, 0, i, 1);
+                        pendingOrder = new PendingOrder(symbol, 0, i, 1, direction);
                     } else { // LIMIT_ORDER
-                        double limitPrice = bar.getClose() * (1.0 - limitOffsetPercent / 100.0);
-                        pendingOrder = new PendingOrder(symbol, limitPrice, i, maxBarsToFill);
+                        double limitPrice;
+                        if ("ABOVE".equals(direction)) {
+                            limitPrice = bar.getClose() * (1.0 + limitOffsetPercent / 100.0);
+                        } else {
+                            limitPrice = bar.getClose() * (1.0 - limitOffsetPercent / 100.0);
+                        }
+                        pendingOrder = new PendingOrder(symbol, limitPrice, i, maxBarsToFill, direction);
                     }
                 }
             }

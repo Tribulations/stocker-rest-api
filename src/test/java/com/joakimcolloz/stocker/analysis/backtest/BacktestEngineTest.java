@@ -31,7 +31,7 @@ class BacktestEngineTest {
 
     private static final long DAY = 86_400L;
     private static final long BASE_TS = 1_704_067_200L; // 2024-01-01 00:00:00 UTC
-    private static final EntryRule NEXT_BAR_OPEN = new EntryRule("NEXT_BAR_OPEN", null, null, null);
+    private static final EntryRule NEXT_BAR_OPEN = new EntryRule("NEXT_BAR_OPEN", null, null, null, null);
 
     private BacktestEngine engine;
 
@@ -623,7 +623,7 @@ class BacktestEngineTest {
             // Bar 0: RSI=25 → signal. close=100. limit = 100*(1-2/100) = 98
             // Bar 1: low=97 <= 98 → fill at 98
             // Bar 2: high=110 → TP at 98*1.10=107.8 → triggers
-            EntryRule limitOrder = new EntryRule("LIMIT_ORDER", 2.0, 0.0, 3);
+            EntryRule limitOrder = new EntryRule("LIMIT_ORDER", 2.0, 0.0, 3, null);
 
             List<Candlestick> candles = List.of(
                     candle(BASE_TS, 98, 102, 95, 100, 1000),
@@ -651,7 +651,7 @@ class BacktestEngineTest {
             // Bar 0: RSI=25 → signal. close=100. limit=98. maxBarsToFill=1
             // Bar 1: low=99 > 98 → not filled. barsRemaining=0 → expired
             // Bar 2: RSI=50 → no new signal
-            EntryRule limitOrder = new EntryRule("LIMIT_ORDER", 2.0, 0.0, 1);
+            EntryRule limitOrder = new EntryRule("LIMIT_ORDER", 2.0, 0.0, 1, null);
 
             List<Candlestick> candles = List.of(
                     candle(BASE_TS, 98, 102, 95, 100, 1000),
@@ -674,7 +674,7 @@ class BacktestEngineTest {
         void limitZeroOffsetZeroPenetration() {
             // Bar 0: RSI=25 → signal. close=100. limit=100 (0% offset). fillThreshold=100 (0% pen).
             // Bar 1: low=100 <= 100 → fill at 100
-            EntryRule limitOrder = new EntryRule("LIMIT_ORDER", 0.0, 0.0, 1);
+            EntryRule limitOrder = new EntryRule("LIMIT_ORDER", 0.0, 0.0, 1, null);
 
             List<Candlestick> candles = List.of(
                     candle(BASE_TS, 98, 102, 95, 100, 1000),
@@ -697,7 +697,7 @@ class BacktestEngineTest {
         void combinedLimitOrderPatternRsi() {
             // Bar 0: pattern ✓, RSI=25 ✓ → signal. close=100. limit=99 (1% offset).
             // Bar 1: low=98 <= 99 → fill at 99. TP at 99*1.10=108.9. high=110 → triggers.
-            EntryRule limitOrder = new EntryRule("LIMIT_ORDER", 1.0, 0.0, 2);
+            EntryRule limitOrder = new EntryRule("LIMIT_ORDER", 1.0, 0.0, 2, null);
 
             List<Candlestick> candles = List.of(
                     candle(BASE_TS, 98, 102, 95, 100, 1000),
@@ -726,7 +726,7 @@ class BacktestEngineTest {
             // Bar 0: RSI=25 → signal. close=100. limit=95 (5% offset). maxBarsToFill=2
             // Bar 1: low=97 > 95. RSI=28 but pending order blocks new signal. barsRemaining=1
             // Bar 2: low=94 <= 95 → fill at 95. RSI=29 irrelevant.
-            EntryRule limitOrder = new EntryRule("LIMIT_ORDER", 5.0, 0.0, 2);
+            EntryRule limitOrder = new EntryRule("LIMIT_ORDER", 5.0, 0.0, 2, null);
 
             List<Candlestick> candles = List.of(
                     candle(BASE_TS, 98, 102, 95, 100, 1000),
@@ -752,7 +752,7 @@ class BacktestEngineTest {
             // Bar 0: RSI=25 → signal. close=100. limit=98 (2% offset). fillThreshold=98*(1-1/100)=97.02
             // Bar 1: low=97.5 > 97.02 → not filled
             // Bar 2: low=96 <= 97.02 → fill at 98
-            EntryRule limitOrder = new EntryRule("LIMIT_ORDER", 2.0, 1.0, 3);
+            EntryRule limitOrder = new EntryRule("LIMIT_ORDER", 2.0, 1.0, 3, null);
 
             List<Candlestick> candles = List.of(
                     candle(BASE_TS, 98, 102, 95, 100, 1000),
@@ -1169,6 +1169,116 @@ class BacktestEngineTest {
             assertEquals("TRAILING_STOP_LOSS", trade.exitReason());
             assertEquals(112.0 * 0.90, trade.exitPrice(), 0.001); // 100.8
             assertEquals(BASE_TS + DAY, trade.exitTimestamp());
+        }
+    }
+
+    @Nested
+    @DisplayName("LimitOrderAboveEntry")
+    class LimitOrderAboveEntry {
+
+        @Test
+        @DisplayName("ABOVE limit fills when high reaches limit price")
+        void aboveLimitFillsWhenHighReachesLimit() {
+            // Bar 0: RSI=25 → signal. close=100. limit = 100*(1+2/100) = 102
+            // Bar 1: high=103 >= 102 → fill at 102
+            // Bar 2: high=115 → TP at 102*1.10=112.2 → triggers
+            EntryRule limitAbove = new EntryRule("LIMIT_ORDER", 2.0, 0.0, 3, "ABOVE");
+
+            List<Candlestick> candles = List.of(
+                    candle(BASE_TS, 98, 102, 95, 100, 1000),
+                    candle(BASE_TS + DAY, 99, 103, 97, 101, 1000),
+                    candle(BASE_TS + 2 * DAY, 101, 115, 100, 112, 1000)
+            );
+
+            Map<Long, Double> rsiValues = Map.of(BASE_TS, 25.0, BASE_TS + DAY, 40.0, BASE_TS + 2 * DAY, 55.0);
+            IndicatorContext ctx = new IndicatorContext(rsiValues, null, 0, null, null);
+            ExitRule exitRule = new ExitRule(5.0, 10.0, null, null);
+
+            List<Trade> trades = engine.runForSymbol(
+                    "TEST.ST", candles, BASE_TS, List.of(rsiFilter(30, "below")), exitRule, null, ctx, limitAbove);
+
+            assertEquals(1, trades.size());
+            Trade trade = trades.getFirst();
+            assertEquals(102.0, trade.entryPrice());
+            assertEquals(BASE_TS + DAY, trade.entryTimestamp());
+            assertEquals("TAKE_PROFIT", trade.exitReason());
+        }
+
+        @Test
+        @DisplayName("ABOVE limit expires when high never reaches limit")
+        void aboveLimitExpiresWhenHighNeverReaches() {
+            // Bar 0: RSI=25 → signal. close=100. limit = 100*(1+5/100) = 105. maxBarsToFill=2
+            // Bar 1: high=103 < 105 → not filled. barsRemaining=1
+            // Bar 2: high=104 < 105 → not filled. barsRemaining=0 → expired
+            EntryRule limitAbove = new EntryRule("LIMIT_ORDER", 5.0, 0.0, 2, "ABOVE");
+
+            List<Candlestick> candles = List.of(
+                    candle(BASE_TS, 98, 102, 95, 100, 1000),
+                    candle(BASE_TS + DAY, 99, 103, 97, 101, 1000),
+                    candle(BASE_TS + 2 * DAY, 100, 104, 98, 102, 1000)
+            );
+
+            Map<Long, Double> rsiValues = Map.of(BASE_TS, 25.0, BASE_TS + DAY, 50.0, BASE_TS + 2 * DAY, 50.0);
+            IndicatorContext ctx = new IndicatorContext(rsiValues, null, 0, null, null);
+            ExitRule exitRule = new ExitRule(5.0, 10.0, null, null);
+
+            List<Trade> trades = engine.runForSymbol(
+                    "TEST.ST", candles, BASE_TS, List.of(rsiFilter(30, "below")), exitRule, null, ctx, limitAbove);
+
+            assertTrue(trades.isEmpty());
+        }
+
+        @Test
+        @DisplayName("ABOVE with penetration requires high to exceed limit by penetration %")
+        void aboveWithPenetration() {
+            // Bar 0: RSI=25 → signal. close=100. limit=102 (2% offset).
+            //        fillThreshold = 102*(1+1/100) = 103.02
+            // Bar 1: high=103 < 103.02 → not filled
+            // Bar 2: high=104 >= 103.02 → fill at 102
+            EntryRule limitAbove = new EntryRule("LIMIT_ORDER", 2.0, 1.0, 3, "ABOVE");
+
+            List<Candlestick> candles = List.of(
+                    candle(BASE_TS, 98, 102, 95, 100, 1000),
+                    candle(BASE_TS + DAY, 99, 103, 97, 101, 1000),
+                    candle(BASE_TS + 2 * DAY, 101, 104, 99, 102, 1000)
+            );
+
+            Map<Long, Double> rsiValues = Map.of(BASE_TS, 25.0, BASE_TS + DAY, 40.0, BASE_TS + 2 * DAY, 50.0);
+            IndicatorContext ctx = new IndicatorContext(rsiValues, null, 0, null, null);
+            ExitRule exitRule = new ExitRule(10.0, 20.0, null, null);
+
+            List<Trade> trades = engine.runForSymbol(
+                    "TEST.ST", candles, BASE_TS, List.of(rsiFilter(30, "below")), exitRule, null, ctx, limitAbove);
+
+            assertEquals(1, trades.size());
+            Trade trade = trades.getFirst();
+            assertEquals(102.0, trade.entryPrice());
+            assertEquals(BASE_TS + 2 * DAY, trade.entryTimestamp());
+        }
+
+        @Test
+        @DisplayName("BELOW still works with null direction (existing behavior)")
+        void belowStillWorksWithNullDirection() {
+            // Same as existing limit order test — null direction defaults to BELOW
+            EntryRule limitOrder = new EntryRule("LIMIT_ORDER", 2.0, 0.0, 3, null);
+
+            List<Candlestick> candles = List.of(
+                    candle(BASE_TS, 98, 102, 95, 100, 1000),
+                    candle(BASE_TS + DAY, 99, 101, 97, 99, 1000),
+                    candle(BASE_TS + 2 * DAY, 100, 110, 98, 108, 1000)
+            );
+
+            Map<Long, Double> rsiValues = Map.of(BASE_TS, 25.0, BASE_TS + DAY, 40.0, BASE_TS + 2 * DAY, 55.0);
+            IndicatorContext ctx = new IndicatorContext(rsiValues, null, 0, null, null);
+            ExitRule exitRule = new ExitRule(5.0, 10.0, null, null);
+
+            List<Trade> trades = engine.runForSymbol(
+                    "TEST.ST", candles, BASE_TS, List.of(rsiFilter(30, "below")), exitRule, null, ctx, limitOrder);
+
+            assertEquals(1, trades.size());
+            Trade trade = trades.getFirst();
+            assertEquals(98.0, trade.entryPrice());
+            assertEquals(BASE_TS + DAY, trade.entryTimestamp());
         }
     }
 }

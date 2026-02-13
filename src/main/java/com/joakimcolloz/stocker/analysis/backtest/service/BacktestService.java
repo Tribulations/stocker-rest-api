@@ -80,7 +80,7 @@ public class BacktestService {
                 ? request.getStartingCapital() : DEFAULT_STARTING_CAPITAL;
 
         EntryRule entryRule = request.getEntryRule() != null
-                ? request.getEntryRule() : new EntryRule("NEXT_BAR_OPEN", null, null, null);
+                ? request.getEntryRule() : new EntryRule("NEXT_BAR_OPEN", null, null, null, null);
 
         List<Trade> allTrades = new ArrayList<>();
 
