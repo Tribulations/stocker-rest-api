@@ -71,6 +71,7 @@ public class BacktestEngine {
         List<Trade> trades = new ArrayList<>();
         Position position = null;
         PendingOrder pendingOrder = null;
+        double highWaterMark = 0.0;
 
         String entryMode = entryRule.entryMode();
         double limitOffsetPercent = entryRule.limitOffsetPercent() != null ? entryRule.limitOffsetPercent() : 0.0;
@@ -83,7 +84,8 @@ public class BacktestEngine {
 
             // 1. Check exits (existing logic)
             if (position != null) {
-                Trade closedTrade = checkExit(position, bar, previousBar, exitRule, exitConditions, indicators);
+                highWaterMark = Math.max(highWaterMark, bar.getHigh());
+                Trade closedTrade = checkExit(position, bar, previousBar, exitRule, exitConditions, indicators, highWaterMark);
                 if (closedTrade != null) {
                     trades.add(closedTrade);
                     position = null;
@@ -110,7 +112,8 @@ public class BacktestEngine {
 
                 // Check exits on the same bar where we just entered (intrabar stop/TP)
                 if (position != null) {
-                    Trade closedTrade = checkExit(position, bar, previousBar, exitRule, exitConditions, indicators);
+                    highWaterMark = Math.max(position.entryPrice(), bar.getHigh());
+                    Trade closedTrade = checkExit(position, bar, previousBar, exitRule, exitConditions, indicators, highWaterMark);
                     if (closedTrade != null) {
                         trades.add(closedTrade);
                         position = null;
@@ -143,12 +146,16 @@ public class BacktestEngine {
 
     private Trade checkExit(Position position, Candlestick bar, Candlestick previousBar,
                             ExitRule exitRule, List<FilterRequest> exitConditions,
-                            IndicatorContext indicators) {
+                            IndicatorContext indicators, double highWaterMark) {
         // 1. Stop-loss (highest priority — risk management)
         if (exitRule.stopLossPercent() != null) {
-            double stopPrice = position.entryPrice() * (1.0 - exitRule.stopLossPercent() / 100.0);
+            double basePrice = Boolean.TRUE.equals(exitRule.trailingStopLoss())
+                    ? highWaterMark : position.entryPrice();
+            double stopPrice = basePrice * (1.0 - exitRule.stopLossPercent() / 100.0);
             if (bar.getLow() <= stopPrice) {
-                return closeTrade(position, bar.getTimestamp(), stopPrice, "STOP_LOSS");
+                String reason = Boolean.TRUE.equals(exitRule.trailingStopLoss())
+                        ? "TRAILING_STOP_LOSS" : "STOP_LOSS";
+                return closeTrade(position, bar.getTimestamp(), stopPrice, reason);
             }
         }
 

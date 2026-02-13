@@ -144,7 +144,7 @@ public class BacktestIntegrationTest extends AbstractCombinedScanIntegrationTest
 
             BacktestRequest request = new BacktestRequest();
             request.setEntryConditions(List.of(createRSIFilter(50, "above")));
-            request.setExitRule(new ExitRule(5.0, 10.0, null));
+            request.setExitRule(new ExitRule(5.0, 10.0, null, null));
             request.setStartTimestamp(humanReadableToTimestamp("2024-01-15 00:00:00"));
             request.setEndTimestamp(humanReadableToTimestamp("2024-02-05 23:59:59"));
             request.setSymbols(List.of("ABB.ST"));
@@ -172,7 +172,7 @@ public class BacktestIntegrationTest extends AbstractCombinedScanIntegrationTest
 
             BacktestRequest request = new BacktestRequest();
             request.setEntryConditions(List.of(createRSIFilter(50, "above")));
-            request.setExitRule(new ExitRule(5.0, 10.0, null));
+            request.setExitRule(new ExitRule(5.0, 10.0, null, null));
             request.setStartTimestamp(humanReadableToTimestamp("2024-01-15 00:00:00"));
             request.setEndTimestamp(humanReadableToTimestamp("2024-02-05 23:59:59"));
             request.setSymbols(List.of("ABB.ST"));
@@ -192,7 +192,7 @@ public class BacktestIntegrationTest extends AbstractCombinedScanIntegrationTest
         void emptyDatabaseReturnsZeroTrades() throws Exception {
             BacktestRequest request = new BacktestRequest();
             request.setEntryConditions(List.of(createRSIFilter(50, "above")));
-            request.setExitRule(new ExitRule(5.0, 10.0, null));
+            request.setExitRule(new ExitRule(5.0, 10.0, null, null));
             request.setStartTimestamp(humanReadableToTimestamp("2024-01-01 00:00:00"));
             request.setEndTimestamp(humanReadableToTimestamp("2024-02-01 23:59:59"));
 
@@ -215,7 +215,7 @@ public class BacktestIntegrationTest extends AbstractCombinedScanIntegrationTest
 
             BacktestRequest request = new BacktestRequest();
             request.setEntryConditions(List.of(createPatternFilter("HAMMER")));
-            request.setExitRule(new ExitRule(5.0, 10.0, 5));
+            request.setExitRule(new ExitRule(5.0, 10.0, 5, null));
             request.setStartTimestamp(humanReadableToTimestamp("2024-01-01 00:00:00"));
             request.setEndTimestamp(humanReadableToTimestamp("2024-01-10 23:59:59"));
             request.setSymbols(List.of("ABB.ST"));
@@ -239,7 +239,7 @@ public class BacktestIntegrationTest extends AbstractCombinedScanIntegrationTest
 
             BacktestRequest request = new BacktestRequest();
             request.setEntryConditions(List.of(createHighVolumeFilter(100)));
-            request.setExitRule(new ExitRule(5.0, 10.0, 5));
+            request.setExitRule(new ExitRule(5.0, 10.0, 5, null));
             request.setStartTimestamp(humanReadableToTimestamp("2024-01-01 00:00:00"));
             request.setEndTimestamp(humanReadableToTimestamp("2024-02-05 23:59:59"));
 
@@ -258,7 +258,7 @@ public class BacktestIntegrationTest extends AbstractCombinedScanIntegrationTest
 
             BacktestRequest request = new BacktestRequest();
             request.setEntryConditions(List.of(createRSIFilter(50, "above")));
-            request.setExitRule(new ExitRule(5.0, 10.0, null));
+            request.setExitRule(new ExitRule(5.0, 10.0, null, null));
             request.setStartTimestamp(humanReadableToTimestamp("2024-01-15 00:00:00"));
             request.setEndTimestamp(humanReadableToTimestamp("2024-02-05 23:59:59"));
             request.setSymbols(List.of("ABB.ST"));
@@ -285,7 +285,7 @@ public class BacktestIntegrationTest extends AbstractCombinedScanIntegrationTest
         void emptyEntryConditions() throws Exception {
             BacktestRequest request = new BacktestRequest();
             request.setEntryConditions(new ArrayList<>());
-            request.setExitRule(new ExitRule(5.0, null, null));
+            request.setExitRule(new ExitRule(5.0, null, null, null));
             request.setStartTimestamp(humanReadableToTimestamp("2024-01-01 00:00:00"));
             request.setEndTimestamp(humanReadableToTimestamp("2024-02-01 23:59:59"));
 
@@ -301,7 +301,7 @@ public class BacktestIntegrationTest extends AbstractCombinedScanIntegrationTest
         void invalidTimeRange() throws Exception {
             BacktestRequest request = new BacktestRequest();
             request.setEntryConditions(List.of(createRSIFilter(50, "above")));
-            request.setExitRule(new ExitRule(5.0, null, null));
+            request.setExitRule(new ExitRule(5.0, null, null, null));
             request.setStartTimestamp(humanReadableToTimestamp("2024-02-01 00:00:00"));
             request.setEndTimestamp(humanReadableToTimestamp("2024-01-01 00:00:00"));
 
@@ -337,7 +337,7 @@ public class BacktestIntegrationTest extends AbstractCombinedScanIntegrationTest
         void missingApiKey() throws Exception {
             BacktestRequest request = new BacktestRequest();
             request.setEntryConditions(List.of(createRSIFilter(50, "above")));
-            request.setExitRule(new ExitRule(5.0, null, null));
+            request.setExitRule(new ExitRule(5.0, null, null, null));
             request.setStartTimestamp(humanReadableToTimestamp("2024-01-01 00:00:00"));
             request.setEndTimestamp(humanReadableToTimestamp("2024-02-01 23:59:59"));
 
@@ -360,7 +360,7 @@ public class BacktestIntegrationTest extends AbstractCombinedScanIntegrationTest
             BacktestRequest request = new BacktestRequest();
             request.setEntryConditions(List.of(
                     createMaCrossoverFilter(5, "SMA", "price_above_ma")));
-            request.setExitRule(new ExitRule(5.0, 10.0, 10));
+            request.setExitRule(new ExitRule(5.0, 10.0, 10, null));
             request.setStartTimestamp(humanReadableToTimestamp("2024-01-15 00:00:00"));
             request.setEndTimestamp(humanReadableToTimestamp("2024-02-05 23:59:59"));
             request.setSymbols(List.of("ABB.ST"));
@@ -383,7 +383,7 @@ public class BacktestIntegrationTest extends AbstractCombinedScanIntegrationTest
 
             BacktestRequest request = new BacktestRequest();
             request.setEntryConditions(List.of(createRSIFilter(90, "above")));
-            request.setExitRule(new ExitRule(10.0, null, 20));
+            request.setExitRule(new ExitRule(10.0, null, 20, null));
             request.setExitConditions(List.of(createRSIFilter(60, "below")));
             request.setStartTimestamp(humanReadableToTimestamp("2024-01-15 00:00:00"));
             request.setEndTimestamp(humanReadableToTimestamp("2024-02-05 23:59:59"));
@@ -396,6 +396,34 @@ public class BacktestIntegrationTest extends AbstractCombinedScanIntegrationTest
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.totalTrades").isNumber())
                     .andExpect(jsonPath("$.trades").isArray());
+        }
+    }
+
+    @Nested
+    @DisplayName("Trailing Stop-Loss")
+    class TrailingStopLossTests {
+
+        @Test
+        @DisplayName("Should execute backtest with trailing stop-loss enabled")
+        void backtestWithTrailingStopLoss() throws Exception {
+            insertBacktestData();
+
+            BacktestRequest request = new BacktestRequest();
+            request.setEntryConditions(List.of(createRSIFilter(50, "above")));
+            request.setExitRule(new ExitRule(5.0, 15.0, null, true));
+            request.setStartTimestamp(humanReadableToTimestamp("2024-01-15 00:00:00"));
+            request.setEndTimestamp(humanReadableToTimestamp("2024-02-05 23:59:59"));
+            request.setSymbols(List.of("ABB.ST"));
+
+            mockMvc.perform(post("/api/analysis/backtest")
+                            .header("X-API-Key", "test-api-key")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(objectMapper.writeValueAsString(request)))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.totalTrades").isNumber())
+                    .andExpect(jsonPath("$.trades").isArray())
+                    .andExpect(jsonPath("$.startingCapital").value(10000.0))
+                    .andExpect(jsonPath("$.finalCapital").isNumber());
         }
     }
 }
