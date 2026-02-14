@@ -398,7 +398,7 @@ class BacktestEngineTest {
 
             assertEquals(1, trades.size());
             assertEquals("STOP_LOSS", trades.getFirst().exitReason());
-            assertEquals(99.0 * 0.95, trades.getFirst().exitPrice(), 0.001);
+            assertEquals(94.05, trades.getFirst().exitPrice(), 0.001);
         }
 
         @Test
@@ -1060,6 +1060,34 @@ class BacktestEngineTest {
     class TrailingStopLoss {
 
         @Test
+        @DisplayName("Default trailing behavior (ON_CLOSE) avoids intrabar ratchet that can override take-profit")
+        void defaultOnCloseAvoidsIntrabarRatchetOverride() {
+            // Bar 0: RSI=25 → signal
+            // Bar 1: entry at open=100.
+            //        Same bar has high=200 and low=150.
+            //        If trailing stop were updated INTRABAR, HWM=200 and stop=196 would trigger (low<=196)
+            //        before take-profit (10%), producing an unrealistic huge exit.
+            //        With default ON_CLOSE, stop is based on prior HWM=entry=100 so it doesn't trigger;
+            //        take-profit exits at 110 as expected.
+            List<Candlestick> candles = List.of(
+                    candle(BASE_TS, 98, 102, 95, 100, 1000),
+                    candle(BASE_TS + DAY, 100, 200, 150, 180, 1000)
+            );
+
+            Map<Long, Double> rsiValues = Map.of(BASE_TS, 25.0, BASE_TS + DAY, 50.0);
+            IndicatorContext ctx = new IndicatorContext(rsiValues, null, 0, null, null);
+            ExitRule exitRule = new ExitRule(2.0, 10.0, null, true);
+
+            List<Trade> trades = engine.runForSymbol(
+                    "TEST.ST", candles, BASE_TS, List.of(rsiFilter(30, "below")), exitRule, null, ctx, NEXT_BAR_OPEN);
+
+            assertEquals(1, trades.size());
+            Trade trade = trades.getFirst();
+            assertEquals("TAKE_PROFIT", trade.exitReason());
+            assertEquals(110.0, trade.exitPrice(), 0.001);
+        }
+
+        @Test
         @DisplayName("Trailing stop ratchets up with price highs")
         void trailingRatchetsUp() {
             // Bar 0: RSI=25 → signal
@@ -1128,8 +1156,8 @@ class BacktestEngineTest {
             //         But low=113 < 114, so trailing stop triggers first (stop-loss checked before TP).
             List<Candlestick> candles = List.of(
                     candle(BASE_TS, 98, 102, 95, 100, 1000),
-                    candle(BASE_TS + DAY, 100, 110, 105, 108, 1000),
-                    candle(BASE_TS + 2 * DAY, 108, 120, 113, 118, 1000)
+                    candle(BASE_TS + DAY, 100, 115, 105, 110, 1000),
+                    candle(BASE_TS + 2 * DAY, 111, 121, 108, 115, 1000)
             );
 
             Map<Long, Double> rsiValues = Map.of(
@@ -1143,7 +1171,7 @@ class BacktestEngineTest {
             assertEquals(1, trades.size());
             Trade trade = trades.getFirst();
             assertEquals("TRAILING_STOP_LOSS", trade.exitReason());
-            assertEquals(120.0 * 0.95, trade.exitPrice(), 0.001); // 114.0
+            assertEquals(115.0 * 0.95, trade.exitPrice(), 0.001); // 109.25
         }
 
         @Test
@@ -1154,7 +1182,8 @@ class BacktestEngineTest {
             //         low=99 < 100.8 → exit on entry bar.
             List<Candlestick> candles = List.of(
                     candle(BASE_TS, 98, 102, 95, 100, 1000),
-                    candle(BASE_TS + DAY, 100, 112, 99, 108, 1000)
+                    candle(BASE_TS + DAY, 100, 112, 99, 108, 1000),
+                    candle(BASE_TS + 2 * DAY, 108, 109, 100, 101, 1000)
             );
 
             Map<Long, Double> rsiValues = Map.of(BASE_TS, 25.0, BASE_TS + DAY, 50.0);
@@ -1168,7 +1197,7 @@ class BacktestEngineTest {
             Trade trade = trades.getFirst();
             assertEquals("TRAILING_STOP_LOSS", trade.exitReason());
             assertEquals(112.0 * 0.90, trade.exitPrice(), 0.001); // 100.8
-            assertEquals(BASE_TS + DAY, trade.exitTimestamp());
+            assertEquals(BASE_TS + 2 * DAY, trade.exitTimestamp());
         }
     }
 
