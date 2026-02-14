@@ -1,5 +1,6 @@
 package com.joakimcolloz.stocker.analysis.controller;
 
+import com.joakimcolloz.stocker.analysis.dto.response.SupportedFilterInfo;
 import com.joakimcolloz.stocker.analysis.dto.response.MacdSeriesResponse;
 import com.joakimcolloz.stocker.analysis.dto.response.RsiSeriesResponse;
 import com.joakimcolloz.stocker.analysis.service.MacdIndicatorService;
@@ -11,6 +12,9 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+
+import java.util.List;
+import java.util.Map;
 
 /**
  * REST controller exposing technical indicator endpoints.
@@ -73,5 +77,37 @@ public class IndicatorsController {
 	) {
 		return ResponseEntity.ok(macdIndicatorService.getStableMacdSeries(
 				symbol, startTimestamp, endTimestamp, fastPeriod, slowPeriod, signalPeriod));
+	}
+
+	@GetMapping("/supported")
+	@Operation(summary = "Get supported indicators",
+			description = "Returns all available indicator endpoints and their supported query parameters")
+	public ResponseEntity<List<SupportedFilterInfo>> getSupportedIndicators() {
+		return ResponseEntity.ok(List.of(
+				new SupportedFilterInfo(
+						"RSI",
+						"RSI",
+						"Relative Strength Index series",
+						Map.of(
+								"symbol", "String — ticker symbol",
+								"startTimestamp", "long — epoch seconds (inclusive)",
+								"endTimestamp", "long — epoch seconds (inclusive)",
+								"period", "int — RSI period (default 14)"
+						)
+				),
+				new SupportedFilterInfo(
+						"MACD",
+						"MACD",
+						"MACD series (macd/signal/histogram)",
+						Map.of(
+								"symbol", "String — ticker symbol",
+								"startTimestamp", "long — epoch seconds (inclusive)",
+								"endTimestamp", "long — epoch seconds (inclusive)",
+								"fastPeriod", "int — fast EMA period (default 12)",
+								"slowPeriod", "int — slow EMA period (default 26)",
+								"signalPeriod", "int — signal EMA period (default 9)"
+						)
+				)
+		));
 	}
 }
