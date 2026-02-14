@@ -87,11 +87,16 @@ public class BacktestEngine {
 
             // 1. Check exits (existing logic)
             if (position != null) {
-                highWaterMark = Math.max(highWaterMark, bar.getHigh());
-                Trade closedTrade = checkExit(position, bar, previousBar, exitRule, exitConditions, indicators, highWaterMark);
+                Trade closedTrade = checkExit(position, bar, previousBar, exitRule, exitConditions, indicators,
+                        highWaterMark, highWaterMark);
                 if (closedTrade != null) {
                     trades.add(closedTrade);
                     position = null;
+                    highWaterMark = 0.0;
+                } else {
+                    if (Boolean.TRUE.equals(exitRule.trailingStopLoss())) {
+                        highWaterMark = Math.max(highWaterMark, bar.getHigh());
+                    }
                 }
             }
 
@@ -122,13 +127,22 @@ public class BacktestEngine {
                     }
                 }
 
+                if (position != null) {
+                    highWaterMark = position.entryPrice();
+                }
+
                 // Check exits on the same bar where we just entered (intrabar stop/TP)
                 if (position != null) {
-                    highWaterMark = Math.max(position.entryPrice(), bar.getHigh());
-                    Trade closedTrade = checkExit(position, bar, previousBar, exitRule, exitConditions, indicators, highWaterMark);
+                    Trade closedTrade = checkExit(position, bar, previousBar, exitRule, exitConditions, indicators,
+                            highWaterMark, highWaterMark);
                     if (closedTrade != null) {
                         trades.add(closedTrade);
                         position = null;
+                        highWaterMark = 0.0;
+                    } else {
+                        if (Boolean.TRUE.equals(exitRule.trailingStopLoss())) {
+                            highWaterMark = Math.max(highWaterMark, bar.getHigh());
+                        }
                     }
                 }
             }
@@ -163,25 +177,35 @@ public class BacktestEngine {
 
     private Trade checkExit(Position position, Candlestick bar, Candlestick previousBar,
                             ExitRule exitRule, List<FilterRequest> exitConditions,
-                            IndicatorContext indicators, double highWaterMark) {
-        // 1. Stop-loss (highest priority — risk management)
+                            IndicatorContext indicators, double preBarHighWaterMark, double highWaterMark) {
+        Trade stopExit = null;
         if (exitRule.stopLossPercent() != null) {
-            double basePrice = Boolean.TRUE.equals(exitRule.trailingStopLoss())
-                    ? highWaterMark : position.entryPrice();
+            boolean trailing = Boolean.TRUE.equals(exitRule.trailingStopLoss());
+
+            double basePriceAtOpen = trailing ? preBarHighWaterMark : position.entryPrice();
+            double stopPriceAtOpen = basePriceAtOpen * (1.0 - exitRule.stopLossPercent() / 100.0);
+
+            double basePrice = trailing ? highWaterMark : position.entryPrice();
             double stopPrice = basePrice * (1.0 - exitRule.stopLossPercent() / 100.0);
+
             if (bar.getLow() <= stopPrice) {
-                String reason = Boolean.TRUE.equals(exitRule.trailingStopLoss())
-                        ? "TRAILING_STOP_LOSS" : "STOP_LOSS";
-                return closeTrade(position, bar.getTimestamp(), stopPrice, reason);
+                String reason = trailing ? "TRAILING_STOP_LOSS" : "STOP_LOSS";
+                double fillPrice = bar.getOpen() <= stopPriceAtOpen ? bar.getOpen() : stopPrice;
+                stopExit = closeTrade(position, bar.getTimestamp(), fillPrice, reason);
             }
         }
 
-        // 2. Take-profit
+        Trade takeProfitExit = null;
         if (exitRule.takeProfitPercent() != null) {
             double targetPrice = position.entryPrice() * (1.0 + exitRule.takeProfitPercent() / 100.0);
             if (bar.getHigh() >= targetPrice) {
-                return closeTrade(position, bar.getTimestamp(), targetPrice, "TAKE_PROFIT");
+                double fillPrice = bar.getOpen() >= targetPrice ? bar.getOpen() : targetPrice;
+                takeProfitExit = closeTrade(position, bar.getTimestamp(), fillPrice, "TAKE_PROFIT");
             }
+        }
+
+        if (stopExit != null || takeProfitExit != null) {
+            return stopExit != null ? stopExit : takeProfitExit;
         }
 
         // 3. Indicator-based exit conditions (OR logic — any condition triggers exit)
