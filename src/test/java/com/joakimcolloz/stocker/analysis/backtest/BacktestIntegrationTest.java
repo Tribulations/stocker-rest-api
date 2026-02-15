@@ -17,6 +17,7 @@ import java.util.List;
 import static com.joakimcolloz.stocker.api.AnalysisApiIntegrationTestUtil.humanReadableToTimestamp;
 import static org.hamcrest.Matchers.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -206,6 +207,31 @@ public class BacktestIntegrationTest extends AbstractCombinedScanIntegrationTest
                     .andExpect(jsonPath("$.winRate").value(0.0))
                     .andExpect(jsonPath("$.startingCapital").value(10000.0))
                     .andExpect(jsonPath("$.finalCapital").value(10000.0));
+        }
+
+        @Test
+        @DisplayName("Should expose supported execution config options")
+        void supportedEndpointIncludesExecutionConfig() throws Exception {
+            mockMvc.perform(get("/api/analysis/backtest/supported")
+                            .header("X-API-Key", "test-api-key"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.execution").exists())
+                    .andExpect(jsonPath("$.execution.mode", hasItems("DAILY_ONLY", "HYBRID_INTRADAY")))
+                    .andExpect(jsonPath("$.execution.intradayInterval", hasItem("5m")))
+                    .andExpect(jsonPath("$.execution.defaults.mode").value("DAILY_ONLY"))
+                    .andExpect(jsonPath("$.execution.defaults.conservativeFillMode").value(true));
+        }
+
+        @Test
+        @DisplayName("Should expose backtest description endpoint")
+        void descriptionEndpointExists() throws Exception {
+            mockMvc.perform(get("/api/analysis/backtest/description")
+                            .header("X-API-Key", "test-api-key"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.positions").value("LONG_ONLY"))
+                    .andExpect(jsonPath("$.executionModes.DAILY_ONLY").exists())
+                    .andExpect(jsonPath("$.executionModes.HYBRID_INTRADAY").exists())
+                    .andExpect(jsonPath("$.intraday.interval").value("5m"));
         }
 
         @Test

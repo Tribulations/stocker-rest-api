@@ -2,8 +2,17 @@ package com.joakimcolloz.stocker.analysis.backtest.service;
 
 import com.joakimcolloz.stocker.analysis.backtest.dto.BacktestRequest;
 import com.joakimcolloz.stocker.analysis.backtest.dto.BacktestResult;
+import com.joakimcolloz.stocker.analysis.backtest.dto.ExecutionConfig;
+import com.joakimcolloz.stocker.analysis.backtest.dto.ExecutionMode;
 import com.joakimcolloz.stocker.analysis.backtest.dto.EntryRule;
 import com.joakimcolloz.stocker.analysis.backtest.dto.Trade;
+import com.joakimcolloz.stocker.analysis.backtest.data.MarketDataProvider;
+import com.joakimcolloz.stocker.analysis.backtest.execution.BacktestSeriesInput;
+import com.joakimcolloz.stocker.analysis.backtest.execution.BpsCostModel;
+import com.joakimcolloz.stocker.analysis.backtest.execution.CostModel;
+import com.joakimcolloz.stocker.analysis.backtest.execution.DailyExecutionModel;
+import com.joakimcolloz.stocker.analysis.backtest.execution.ExecutionModel;
+import com.joakimcolloz.stocker.analysis.backtest.execution.HybridIntradayExecutionModel;
 import com.joakimcolloz.stocker.analysis.backtest.engine.BacktestEngine;
 import com.joakimcolloz.stocker.analysis.backtest.engine.IndicatorContext;
 import com.joakimcolloz.stocker.analysis.dto.filter.FilterRequest;
@@ -17,8 +26,8 @@ import com.joakimcolloz.stocker.analysis.indicator.MovingAverageCalculator;
 import com.joakimcolloz.stocker.analysis.indicator.RsiCalculator;
 import com.joakimcolloz.stocker.analysis.pattern.PatternDetector;
 import com.joakimcolloz.stocker.analysis.pattern.PatternRegistry;
-import com.joakimcolloz.stocker.api.dao.CandlestickRepository;
 import com.joakimcolloz.stocker.api.entity.Candlestick;
+import com.joakimcolloz.stocker.api.entity.IntradayCandlestick;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
@@ -43,15 +52,15 @@ public class BacktestService {
     private static final int DEFAULT_SLOW_PERIOD = 26;
     private static final int DEFAULT_SIGNAL_PERIOD = 9;
 
-    private final CandlestickRepository candlestickRepository;
+    private final MarketDataProvider marketDataProvider;
     private final FilterRegistry filterRegistry;
     private final PatternRegistry patternRegistry;
     private final BacktestEngine engine = new BacktestEngine();
 
-    public BacktestService(CandlestickRepository candlestickRepository,
+    public BacktestService(MarketDataProvider marketDataProvider,
                            FilterRegistry filterRegistry,
                            PatternRegistry patternRegistry) {
-        this.candlestickRepository = candlestickRepository;
+        this.marketDataProvider = marketDataProvider;
         this.filterRegistry = filterRegistry;
         this.patternRegistry = patternRegistry;
     }
@@ -65,7 +74,24 @@ public class BacktestService {
         long maxLookback = computeMaxLookback(allConditions);
         long extendedStart = request.getStartTimestamp() - maxLookback;
 
-        List<Candlestick> allCandles = fetchCandles(request.getSymbols(), extendedStart, request.getEndTimestamp());
+        List<Candlestick> allCandles = marketDataProvider.fetchDailyCandles(
+                request.getSymbols(),
+                extendedStart,
+                request.getEndTimestamp()
+        );
+
+        ExecutionConfig executionConfig = request.getExecution() != null
+                ? request.getExecution()
+                : new ExecutionConfig(null, null, null, null, null, null);
+
+        List<IntradayCandlestick> intradayCandles = executionConfig.mode() == ExecutionMode.HYBRID_INTRADAY
+                ? marketDataProvider.fetchIntradayCandles(
+                request.getSymbols(),
+                executionConfig.intradayInterval(),
+                request.getStartTimestamp(),
+                request.getEndTimestamp()
+        )
+                : List.of();
 
         Map<String, List<Candlestick>> bySymbol = allCandles.stream()
                 .collect(Collectors.groupingBy(Candlestick::getSymbol));
@@ -82,6 +108,16 @@ public class BacktestService {
         EntryRule entryRule = request.getEntryRule() != null
                 ? request.getEntryRule() : new EntryRule("NEXT_BAR_OPEN", null, null, null, null);
 
+        CostModel costModel = new BpsCostModel(
+                executionConfig.slippageBps(),
+                executionConfig.spreadBps(),
+                executionConfig.commissionBps()
+        );
+
+        ExecutionModel executionModel = executionConfig.mode() == ExecutionMode.HYBRID_INTRADAY
+                ? new HybridIntradayExecutionModel(engine)
+                : new DailyExecutionModel(engine);
+
         List<Trade> allTrades = new ArrayList<>();
 
         for (Map.Entry<String, List<Candlestick>> entry : bySymbol.entrySet()) {
@@ -90,14 +126,31 @@ public class BacktestService {
                     .sorted(Comparator.comparingLong(Candlestick::getTimestamp))
                     .toList();
 
+            List<IntradayCandlestick> sortedIntraday = intradayCandles.isEmpty()
+                    ? List.of()
+                    : intradayCandles.stream()
+                    .filter(c -> symbol.equals(c.getSymbol()))
+                    .sorted(Comparator.comparingLong(IntradayCandlestick::getTimestamp))
+                    .toList();
+
             IndicatorContext indicators = buildIndicatorContext(
                     sortedCandles, allConditions,
                     needsRsi, needsMacd, needsVolume, needsPattern, needsMa);
 
-            List<Trade> symbolTrades = engine.runForSymbol(
-                    symbol, sortedCandles, request.getStartTimestamp(),
-                    request.getEntryConditions(), request.getExitRule(),
-                    request.getExitConditions(), indicators, entryRule);
+            BacktestSeriesInput input = new BacktestSeriesInput(
+                    symbol,
+                    sortedCandles,
+                    sortedIntraday,
+                    request.getStartTimestamp(),
+                    request.getEntryConditions(),
+                    request.getExitRule(),
+                    request.getExitConditions(),
+                    indicators,
+                    entryRule,
+                    executionConfig
+            );
+
+            List<Trade> symbolTrades = executionModel.run(input, costModel);
 
             allTrades.addAll(symbolTrades);
         }
@@ -125,18 +178,6 @@ public class BacktestService {
             maxLookback = Math.max(maxLookback, lookback);
         }
         return maxLookback;
-    }
-
-    private List<Candlestick> fetchCandles(List<String> symbols, long startTimestamp, long endTimestamp) {
-        if (symbols != null && !symbols.isEmpty()) {
-            List<Candlestick> result = new ArrayList<>();
-            for (String symbol : symbols) {
-                result.addAll(candlestickRepository.findBySymbolAndTimestampBetween(
-                        symbol, startTimestamp, endTimestamp));
-            }
-            return result;
-        }
-        return candlestickRepository.findByTimestampBetween(startTimestamp, endTimestamp);
     }
 
     private boolean needsIndicator(List<FilterRequest> conditions, String type) {

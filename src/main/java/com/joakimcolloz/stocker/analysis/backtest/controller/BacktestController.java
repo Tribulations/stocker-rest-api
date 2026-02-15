@@ -65,15 +65,66 @@ public class BacktestController {
                 "fields", List.of("stopLossPercent", "takeProfitPercent", "maxHoldingDays", "trailingStopLoss"),
                 "notes", List.of(
                         "At least one of stopLossPercent, takeProfitPercent, maxHoldingDays must be provided",
-                        "If trailingStopLoss=true then stopLossPercent is required"
+                        "If trailingStopLoss=true then stopLossPercent is required",
+                        "Trailing stop updates after bar close using close price (conservative)"
+                )
+        );
+
+        Map<String, Object> execution = Map.of(
+                "mode", List.of("DAILY_ONLY", "HYBRID_INTRADAY"),
+                "intradayInterval", List.of("5m"),
+                "fields", List.of("slippageBps", "spreadBps", "commissionBps", "conservativeFillMode"),
+                "defaults", Map.of(
+                        "mode", "DAILY_ONLY",
+                        "intradayInterval", "5m",
+                        "slippageBps", 0.0,
+                        "spreadBps", 0.0,
+                        "commissionBps", 0.0,
+                        "conservativeFillMode", true
                 )
         );
 
         Map<String, Object> result = Map.of(
                 "entryRule", entryRule,
                 "exitRule", exitRule,
+                "execution", execution,
                 "filters", filters,
                 "patterns", patternCodes
+        );
+
+        return ResponseEntity.ok(result);
+    }
+
+    @GetMapping("/backtest/description")
+    @Operation(summary = "Backtest framework description",
+            description = "Explains the execution model assumptions, conservative fill rules, intraday fallback behavior, and cost/friction parameters")
+    public ResponseEntity<Map<String, Object>> getBacktestDescription() {
+        Map<String, Object> executionModes = Map.of(
+                "DAILY_ONLY", "Stops/targets/trailing evaluated using daily OHLC with conservative same-bar rules",
+                "HYBRID_INTRADAY", "Entries still driven by daily signals; exits are evaluated on intraday 5m OHLC when available, otherwise fall back to daily"
+        );
+
+        Map<String, Object> conservativeRules = Map.of(
+                "stopFirstOnSameBar", true,
+                "gapThroughStopWorstCase", "If price gaps beyond stop on bar open, fill uses worst-case (e.g., min(open, low) for long stops)",
+                "trailingStopUpdate", "Trailing stop high-water-mark updates after bar close using close price (daily and intraday)"
+        );
+
+        Map<String, Object> costs = Map.of(
+                "spreadBps", "Applied as half-spread on entry and half-spread on exit",
+                "slippageBps", "Applied against the trader (entry worse, exit worse)",
+                "commissionBps", "Applied on both entry and exit when computing return%"
+        );
+
+        Map<String, Object> result = Map.of(
+                "positions", "LONG_ONLY",
+                "executionModes", executionModes,
+                "conservativeRules", conservativeRules,
+                "costs", costs,
+                "intraday", Map.of(
+                        "interval", "5m",
+                        "fallback", "If intraday bars are missing for a given day, that day uses DAILY_ONLY execution"
+                )
         );
 
         return ResponseEntity.ok(result);
