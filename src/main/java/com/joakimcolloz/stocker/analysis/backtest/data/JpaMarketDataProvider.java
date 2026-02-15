@@ -24,6 +24,11 @@ public class JpaMarketDataProvider implements MarketDataProvider {
     }
 
     @Override
+    public List<String> fetchDistinctSymbols() {
+        return candlestickRepository.findAllDistinctSymbols();
+    }
+
+    @Override
     public List<Candlestick> fetchDailyCandles(List<String> symbols, long startTimestamp, long endTimestamp) {
         if (symbols != null && !symbols.isEmpty()) {
             List<Candlestick> result = new ArrayList<>();
