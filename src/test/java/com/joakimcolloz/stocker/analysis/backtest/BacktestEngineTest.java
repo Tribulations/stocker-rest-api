@@ -1091,16 +1091,16 @@ class BacktestEngineTest {
         @DisplayName("Trailing stop ratchets up with price highs")
         void trailingRatchetsUp() {
             // Bar 0: RSI=25 → signal
-            // Bar 1: entry at open=100. high=100 → HWM=100, trailing stop=100*0.95=95. low=98 → no exit.
-            // Bar 2: high=110 → HWM=110, trailing stop=110*0.95=104.5. low=106 → no exit.
-            // Bar 3: high=120 → HWM=120, trailing stop=120*0.95=114. low=115 → no exit.
-            // Bar 4: high=115 → HWM stays 120, trailing stop=114. low=113 → exit at 114.
+            // Bar 1: entry at open=100. close=100 → HWM=100, trailing stop=100*0.95=95. low=98 → no exit.
+            // Bar 2: close=110 → HWM=110, trailing stop=110*0.95=104.5. low=106 → no exit.
+            // Bar 3: close=120 → HWM=120, trailing stop=120*0.95=114. low=115 → no exit.
+            // Bar 4: close=118 → HWM stays 120, trailing stop=114. low=112 → exit at 114.
             List<Candlestick> candles = List.of(
                     candle(BASE_TS, 98, 102, 95, 100, 1000),
-                    candle(BASE_TS + DAY, 100, 100, 98, 99, 1000),
-                    candle(BASE_TS + 2 * DAY, 99, 110, 106, 108, 1000),
-                    candle(BASE_TS + 3 * DAY, 108, 120, 115, 118, 1000),
-                    candle(BASE_TS + 4 * DAY, 118, 115, 113, 114, 1000)
+                    candle(BASE_TS + DAY, 100, 101, 98, 100, 1000),
+                    candle(BASE_TS + 2 * DAY, 100, 112, 106, 110, 1000),
+                    candle(BASE_TS + 3 * DAY, 110, 121, 115, 120, 1000),
+                    candle(BASE_TS + 4 * DAY, 120, 120, 112, 118, 1000)
             );
 
             Map<Long, Double> rsiValues = Map.of(
@@ -1151,19 +1151,19 @@ class BacktestEngineTest {
         @DisplayName("Stop-loss has priority over take-profit on same bar")
         void stopLossPriorityOverTakeProfit() {
             // Bar 0: RSI=25 → signal
-            // Bar 1: entry at open=100. high=110 → HWM=110, trailing stop=110*0.95=104.5. low=105 → no exit.
-            // Bar 2: high=120 → HWM=120, trailing stop=120*0.95=114. TP=100*1.20=120. high=120 triggers TP.
+            // Bar 1: entry at open=100. close=120 → HWM=120, trailing stop=120*0.95=114. low=105 → no exit.
+            // Bar 2: high=130 triggers TP=100*1.30=130.
             //         But low=113 < 114, so trailing stop triggers first (stop-loss checked before TP).
             List<Candlestick> candles = List.of(
                     candle(BASE_TS, 98, 102, 95, 100, 1000),
-                    candle(BASE_TS + DAY, 100, 115, 105, 110, 1000),
-                    candle(BASE_TS + 2 * DAY, 111, 121, 108, 115, 1000)
+                    candle(BASE_TS + DAY, 100, 125, 105, 120, 1000),
+                    candle(BASE_TS + 2 * DAY, 121, 131, 113, 125, 1000)
             );
 
             Map<Long, Double> rsiValues = Map.of(
                     BASE_TS, 25.0, BASE_TS + DAY, 50.0, BASE_TS + 2 * DAY, 55.0);
             IndicatorContext ctx = new IndicatorContext(rsiValues, null, 0, null, null);
-            ExitRule exitRule = new ExitRule(5.0, 20.0, null, true);
+            ExitRule exitRule = new ExitRule(5.0, 30.0, null, true);
 
             List<Trade> trades = engine.runForSymbol(
                     "TEST.ST", candles, BASE_TS, List.of(rsiFilter(30, "below")), exitRule, null, ctx, NEXT_BAR_OPEN);
@@ -1171,19 +1171,20 @@ class BacktestEngineTest {
             assertEquals(1, trades.size());
             Trade trade = trades.getFirst();
             assertEquals("TRAILING_STOP_LOSS", trade.exitReason());
-            assertEquals(115.0 * 0.95, trade.exitPrice(), 0.001); // 109.25
+            assertEquals(120.0 * 0.95, trade.exitPrice(), 0.001); // 114.0
         }
 
         @Test
         @DisplayName("Trailing stop uses entry-bar high as initial HWM")
         void trailingOnEntryBar() {
             // Bar 0: RSI=25 → signal
-            // Bar 1: entry at open=100. bar high=112 → HWM=112. trailing stop=112*0.90=100.8.
-            //         low=99 < 100.8 → exit on entry bar.
+            // Close-based trailing updates after the entry bar closes (not intrabar).
+            // Bar 1: entry at open=100. close=112 → HWM=112. trailing stop=112*0.90=100.8.
+            // Bar 2: low=99 < 100.8 → exit on bar 2 at 100.8.
             List<Candlestick> candles = List.of(
                     candle(BASE_TS, 98, 102, 95, 100, 1000),
-                    candle(BASE_TS + DAY, 100, 112, 99, 108, 1000),
-                    candle(BASE_TS + 2 * DAY, 108, 109, 100, 101, 1000)
+                    candle(BASE_TS + DAY, 100, 112, 99, 112, 1000),
+                    candle(BASE_TS + 2 * DAY, 108, 109, 99, 101, 1000)
             );
 
             Map<Long, Double> rsiValues = Map.of(BASE_TS, 25.0, BASE_TS + DAY, 50.0);

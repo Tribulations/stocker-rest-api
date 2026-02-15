@@ -1,20 +1,19 @@
 package com.joakimcolloz.stocker.analysis.backtest.engine;
 
+import com.joakimcolloz.stocker.analysis.backtest.dto.ExecutionConfig;
+import com.joakimcolloz.stocker.analysis.backtest.dto.ExecutionMode;
 import com.joakimcolloz.stocker.analysis.backtest.dto.EntryRule;
 import com.joakimcolloz.stocker.analysis.backtest.dto.ExitRule;
 import com.joakimcolloz.stocker.analysis.backtest.dto.Trade;
-import com.joakimcolloz.stocker.analysis.dto.filter.FilterParams;
+import com.joakimcolloz.stocker.analysis.backtest.execution.BpsCostModel;
+import com.joakimcolloz.stocker.analysis.backtest.execution.ConditionEvaluator;
+import com.joakimcolloz.stocker.analysis.backtest.execution.CostModel;
 import com.joakimcolloz.stocker.analysis.dto.filter.FilterRequest;
-import com.joakimcolloz.stocker.analysis.dto.filter.HighVolumeFilterParams;
-import com.joakimcolloz.stocker.analysis.dto.filter.MacdFilterParams;
-import com.joakimcolloz.stocker.analysis.dto.filter.MovingAverageFilterParams;
-import com.joakimcolloz.stocker.analysis.dto.filter.RsiFilterParams;
-import com.joakimcolloz.stocker.analysis.indicator.MacdCalculator.MacdValues;
 import com.joakimcolloz.stocker.api.entity.Candlestick;
+import com.joakimcolloz.stocker.api.entity.IntradayCandlestick;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 
 /**
  * Bar-by-bar backtest engine. No Spring dependencies — pure logic, easy to unit test.
@@ -27,21 +26,21 @@ import java.util.Map;
 public class BacktestEngine {
 
     private static final long SECONDS_PER_DAY = 86_400L;
+    private static final long INTRADAY_BAR_SECONDS = 300L;
+
+    private record ExitCheckResult(Trade trade, double updatedHighWaterMark) {
+    }
 
     record Position(String symbol, long entryTimestamp, double entryPrice) {
     }
 
     private static class PendingOrder {
-        final String symbol;
         final double limitPrice;
-        final int signalBarIndex;
         final String direction; // "ABOVE" or "BELOW"
         int barsRemaining;
 
-        PendingOrder(String symbol, double limitPrice, int signalBarIndex, int barsRemaining, String direction) {
-            this.symbol = symbol;
+        PendingOrder(double limitPrice, int barsRemaining, String direction) {
             this.limitPrice = limitPrice;
-            this.signalBarIndex = signalBarIndex;
             this.barsRemaining = barsRemaining;
             this.direction = direction;
         }
@@ -70,10 +69,47 @@ public class BacktestEngine {
             IndicatorContext indicators,
             EntryRule entryRule
     ) {
+        return runForSymbol(symbol, sortedCandles, tradingStartTimestamp, entryConditions, exitRule,
+                exitConditions, indicators, entryRule,
+                new ExecutionConfig(null, null, null, null, null, null), List.of(), new BpsCostModel(0.0, 0.0, 0.0));
+    }
+
+    public List<Trade> runForSymbol(
+            String symbol,
+            List<Candlestick> sortedCandles,
+            long tradingStartTimestamp,
+            List<FilterRequest> entryConditions,
+            ExitRule exitRule,
+            List<FilterRequest> exitConditions,
+            IndicatorContext indicators,
+            EntryRule entryRule,
+            ExecutionConfig executionConfig,
+            List<IntradayCandlestick> sortedIntradayCandles
+    ) {
+        return runForSymbol(symbol, sortedCandles, tradingStartTimestamp, entryConditions, exitRule, exitConditions,
+                indicators, entryRule, executionConfig, sortedIntradayCandles,
+                new BpsCostModel(executionConfig.slippageBps(), executionConfig.spreadBps(), executionConfig.commissionBps()));
+    }
+
+    public List<Trade> runForSymbol(
+            String symbol,
+            List<Candlestick> sortedCandles,
+            long tradingStartTimestamp,
+            List<FilterRequest> entryConditions,
+            ExitRule exitRule,
+            List<FilterRequest> exitConditions,
+            IndicatorContext indicators,
+            EntryRule entryRule,
+            ExecutionConfig executionConfig,
+            List<IntradayCandlestick> sortedIntradayCandles,
+            CostModel costModel
+    ) {
         List<Trade> trades = new ArrayList<>();
         Position position = null;
         PendingOrder pendingOrder = null;
         double highWaterMark = 0.0;
+
+        int intradayIndex = 0;
 
         String entryMode = entryRule.entryMode();
         double limitOffsetPercent = entryRule.limitOffsetPercent() != null ? entryRule.limitOffsetPercent() : 0.0;
@@ -87,15 +123,58 @@ public class BacktestEngine {
 
             // 1. Check exits (existing logic)
             if (position != null) {
-                Trade closedTrade = checkExit(position, bar, previousBar, exitRule, exitConditions, indicators,
-                        highWaterMark, highWaterMark);
+                Trade closedTrade;
+
+                if (executionConfig.mode() == ExecutionMode.HYBRID_INTRADAY && !sortedIntradayCandles.isEmpty()) {
+                    int startIdx = intradayIndex;
+                    while (startIdx < sortedIntradayCandles.size()
+                            && sortedIntradayCandles.get(startIdx).getTimestamp() < bar.getTimestamp()) {
+                        startIdx++;
+                    }
+                    int endIdx = startIdx;
+                    while (endIdx < sortedIntradayCandles.size()
+                            && sortedIntradayCandles.get(endIdx).getTimestamp() < (bar.getTimestamp() + SECONDS_PER_DAY)) {
+                        endIdx++;
+                    }
+                    intradayIndex = startIdx;
+
+                    boolean intradaySliceLooksUsable = startIdx < endIdx
+                            && sortedIntradayCandles.get(startIdx).getTimestamp() <= (bar.getTimestamp() + INTRADAY_BAR_SECONDS);
+
+                    if (intradaySliceLooksUsable) {
+                        ExitCheckResult intradayExit = checkExitIntraday(
+                                position,
+                                sortedIntradayCandles.subList(startIdx, endIdx),
+                                exitRule,
+                                highWaterMark,
+                                executionConfig,
+                                costModel
+                        );
+                        closedTrade = intradayExit.trade();
+                        highWaterMark = intradayExit.updatedHighWaterMark();
+                        intradayIndex = endIdx;
+                    } else {
+                        closedTrade = checkExitDaily(position, bar, previousBar, exitRule, exitConditions, indicators,
+                                highWaterMark, highWaterMark, executionConfig, costModel);
+                    }
+                } else {
+                    closedTrade = checkExitDaily(position, bar, previousBar, exitRule, exitConditions, indicators,
+                            highWaterMark, highWaterMark, executionConfig, costModel);
+                }
+
                 if (closedTrade != null) {
                     trades.add(closedTrade);
                     position = null;
                     highWaterMark = 0.0;
                 } else {
                     if (Boolean.TRUE.equals(exitRule.trailingStopLoss())) {
-                        highWaterMark = Math.max(highWaterMark, bar.getHigh());
+                        if (executionConfig.mode() == ExecutionMode.HYBRID_INTRADAY && !sortedIntradayCandles.isEmpty()) {
+                            // In intraday mode, trailing HWM is updated via intraday bar closes,
+                            // and we conservatively also update at the daily close.
+                            highWaterMark = Math.max(highWaterMark, bar.getClose());
+                        } else {
+                            highWaterMark = Math.max(highWaterMark, bar.getClose());
+                        }
                     }
                 }
             }
@@ -103,13 +182,15 @@ public class BacktestEngine {
             // 2. Try to fill pending order
             if (pendingOrder != null && position == null) {
                 if ("NEXT_BAR_OPEN".equals(entryMode)) {
-                    position = new Position(symbol, bar.getTimestamp(), bar.getOpen());
+                    double entryFill = costModel.applyEntryPrice(bar.getOpen());
+                    position = new Position(symbol, bar.getTimestamp(), entryFill);
                     pendingOrder = null;
                 } else { // LIMIT_ORDER
                     if ("ABOVE".equals(pendingOrder.direction)) {
                         double fillThreshold = pendingOrder.limitPrice * (1.0 + penetrationPercent / 100.0);
                         if (bar.getHigh() >= fillThreshold) {
-                            position = new Position(symbol, bar.getTimestamp(), pendingOrder.limitPrice);
+                            double entryFill = costModel.applyEntryPrice(pendingOrder.limitPrice);
+                            position = new Position(symbol, bar.getTimestamp(), entryFill);
                             pendingOrder = null;
                         } else {
                             pendingOrder.barsRemaining--;
@@ -118,7 +199,8 @@ public class BacktestEngine {
                     } else {
                         double fillThreshold = pendingOrder.limitPrice * (1.0 - penetrationPercent / 100.0);
                         if (bar.getLow() <= fillThreshold) {
-                            position = new Position(symbol, bar.getTimestamp(), pendingOrder.limitPrice);
+                            double entryFill = costModel.applyEntryPrice(pendingOrder.limitPrice);
+                            position = new Position(symbol, bar.getTimestamp(), entryFill);
                             pendingOrder = null;
                         } else {
                             pendingOrder.barsRemaining--;
@@ -133,15 +215,54 @@ public class BacktestEngine {
 
                 // Check exits on the same bar where we just entered (intrabar stop/TP)
                 if (position != null) {
-                    Trade closedTrade = checkExit(position, bar, previousBar, exitRule, exitConditions, indicators,
-                            highWaterMark, highWaterMark);
+                    Trade closedTrade;
+                    if (executionConfig.mode() == ExecutionMode.HYBRID_INTRADAY && !sortedIntradayCandles.isEmpty()) {
+                        int startIdx = intradayIndex;
+                        while (startIdx < sortedIntradayCandles.size()
+                                && sortedIntradayCandles.get(startIdx).getTimestamp() < bar.getTimestamp()) {
+                            startIdx++;
+                        }
+                        int endIdx = startIdx;
+                        while (endIdx < sortedIntradayCandles.size()
+                                && sortedIntradayCandles.get(endIdx).getTimestamp() < (bar.getTimestamp() + SECONDS_PER_DAY)) {
+                            endIdx++;
+                        }
+                        intradayIndex = startIdx;
+                        boolean intradaySliceLooksUsable = startIdx < endIdx
+                                && sortedIntradayCandles.get(startIdx).getTimestamp() <= (bar.getTimestamp() + INTRADAY_BAR_SECONDS);
+
+                        if (intradaySliceLooksUsable) {
+                            ExitCheckResult intradayExit = checkExitIntraday(
+                                    position,
+                                    sortedIntradayCandles.subList(startIdx, endIdx),
+                                    exitRule,
+                                    highWaterMark,
+                                    executionConfig,
+                                    costModel
+                            );
+                            closedTrade = intradayExit.trade();
+                            highWaterMark = intradayExit.updatedHighWaterMark();
+                            intradayIndex = endIdx;
+                        } else {
+                            closedTrade = checkExitDaily(position, bar, previousBar, exitRule, exitConditions, indicators,
+                                    highWaterMark, highWaterMark, executionConfig, costModel);
+                        }
+                    } else {
+                        closedTrade = checkExitDaily(position, bar, previousBar, exitRule, exitConditions, indicators,
+                                highWaterMark, highWaterMark, executionConfig, costModel);
+                    }
+
                     if (closedTrade != null) {
                         trades.add(closedTrade);
                         position = null;
                         highWaterMark = 0.0;
                     } else {
                         if (Boolean.TRUE.equals(exitRule.trailingStopLoss())) {
-                            highWaterMark = Math.max(highWaterMark, bar.getHigh());
+                            if (executionConfig.mode() == ExecutionMode.HYBRID_INTRADAY && !sortedIntradayCandles.isEmpty()) {
+                                highWaterMark = Math.max(highWaterMark, bar.getClose());
+                            } else {
+                                highWaterMark = Math.max(highWaterMark, bar.getClose());
+                            }
                         }
                     }
                 }
@@ -149,9 +270,9 @@ public class BacktestEngine {
 
             // 3. Check entry conditions (only if no position AND no pending order)
             if (position == null && pendingOrder == null && bar.getTimestamp() >= tradingStartTimestamp) {
-                if (allEntryConditionsMet(bar, previousBar, entryConditions, indicators)) {
+                if (ConditionEvaluator.allEntryConditionsMet(bar, previousBar, entryConditions, indicators)) {
                     if ("NEXT_BAR_OPEN".equals(entryMode)) {
-                        pendingOrder = new PendingOrder(symbol, 0, i, 1, direction);
+                        pendingOrder = new PendingOrder(0, 1, direction);
                     } else { // LIMIT_ORDER
                         double limitPrice;
                         if ("ABOVE".equals(direction)) {
@@ -159,7 +280,7 @@ public class BacktestEngine {
                         } else {
                             limitPrice = bar.getClose() * (1.0 - limitOffsetPercent / 100.0);
                         }
-                        pendingOrder = new PendingOrder(symbol, limitPrice, i, maxBarsToFill, direction);
+                        pendingOrder = new PendingOrder(limitPrice, maxBarsToFill, direction);
                     }
                 }
             }
@@ -168,16 +289,17 @@ public class BacktestEngine {
         // Close any open position at end of data
         if (position != null && !sortedCandles.isEmpty()) {
             Candlestick lastBar = sortedCandles.getLast();
-            trades.add(closeTrade(position, lastBar.getTimestamp(), lastBar.getClose(), "END_OF_DATA"));
+            trades.add(closeTrade(position, lastBar.getTimestamp(), lastBar.getClose(), "END_OF_DATA", costModel));
         }
         // Pending orders at end of data are simply dropped (no forced fill)
 
         return trades;
     }
 
-    private Trade checkExit(Position position, Candlestick bar, Candlestick previousBar,
-                            ExitRule exitRule, List<FilterRequest> exitConditions,
-                            IndicatorContext indicators, double preBarHighWaterMark, double highWaterMark) {
+    private Trade checkExitDaily(Position position, Candlestick bar, Candlestick previousBar,
+                                ExitRule exitRule, List<FilterRequest> exitConditions,
+                                IndicatorContext indicators, double preBarHighWaterMark, double highWaterMark,
+                                ExecutionConfig executionConfig, CostModel costModel) {
         Trade stopExit = null;
         if (exitRule.stopLossPercent() != null) {
             boolean trailing = Boolean.TRUE.equals(exitRule.trailingStopLoss());
@@ -191,7 +313,7 @@ public class BacktestEngine {
             if (bar.getLow() <= stopPrice) {
                 String reason = trailing ? "TRAILING_STOP_LOSS" : "STOP_LOSS";
                 double fillPrice = bar.getOpen() <= stopPriceAtOpen ? bar.getOpen() : stopPrice;
-                stopExit = closeTrade(position, bar.getTimestamp(), fillPrice, reason);
+                stopExit = closeTrade(position, bar.getTimestamp(), fillPrice, reason, costModel);
             }
         }
 
@@ -200,7 +322,7 @@ public class BacktestEngine {
             double targetPrice = position.entryPrice() * (1.0 + exitRule.takeProfitPercent() / 100.0);
             if (bar.getHigh() >= targetPrice) {
                 double fillPrice = bar.getOpen() >= targetPrice ? bar.getOpen() : targetPrice;
-                takeProfitExit = closeTrade(position, bar.getTimestamp(), fillPrice, "TAKE_PROFIT");
+                takeProfitExit = closeTrade(position, bar.getTimestamp(), fillPrice, "TAKE_PROFIT", costModel);
             }
         }
 
@@ -211,9 +333,9 @@ public class BacktestEngine {
         // 3. Indicator-based exit conditions (OR logic — any condition triggers exit)
         if (exitConditions != null) {
             for (FilterRequest condition : exitConditions) {
-                if (evaluateCondition(bar, previousBar, condition, indicators)) {
+                if (ConditionEvaluator.evaluateCondition(bar, previousBar, condition, indicators)) {
                     return closeTrade(position, bar.getTimestamp(), bar.getClose(),
-                            condition.getType() + "_EXIT");
+                            condition.getType() + "_EXIT", costModel);
                 }
             }
         }
@@ -223,142 +345,103 @@ public class BacktestEngine {
             long holdingSeconds = bar.getTimestamp() - position.entryTimestamp();
             int holdingDays = (int) (holdingSeconds / SECONDS_PER_DAY);
             if (holdingDays >= exitRule.maxHoldingDays()) {
-                return closeTrade(position, bar.getTimestamp(), bar.getClose(), "MAX_HOLDING_DAYS");
+                return closeTrade(position, bar.getTimestamp(), bar.getClose(), "MAX_HOLDING_DAYS", costModel);
             }
         }
 
         return null;
     }
 
-    private Trade closeTrade(Position position, long exitTimestamp, double exitPrice, String exitReason) {
-        double returnPercent = (exitPrice - position.entryPrice()) / position.entryPrice() * 100.0;
+    private ExitCheckResult checkExitIntraday(
+            Position position,
+            List<IntradayCandlestick> bars,
+            ExitRule exitRule,
+            double startingHighWaterMark,
+            ExecutionConfig executionConfig,
+            CostModel costModel
+    ) {
+        double highWaterMark = startingHighWaterMark;
+
+        for (IntradayCandlestick bar : bars) {
+            boolean trailing = Boolean.TRUE.equals(exitRule.trailingStopLoss());
+            double preBarHwm = highWaterMark;
+
+            double stopFillRaw = 0.0;
+            boolean stopHit = false;
+            String stopReason = null;
+
+            if (exitRule.stopLossPercent() != null) {
+                double basePriceAtOpen = trailing ? preBarHwm : position.entryPrice();
+                double stopPriceAtOpen = basePriceAtOpen * (1.0 - exitRule.stopLossPercent() / 100.0);
+                double basePrice = trailing ? preBarHwm : position.entryPrice();
+                double stopPrice = basePrice * (1.0 - exitRule.stopLossPercent() / 100.0);
+
+                if (bar.getLow() <= stopPrice) {
+                    stopHit = true;
+                    stopReason = trailing ? "TRAILING_STOP_LOSS" : "STOP_LOSS";
+                    if (bar.getOpen() <= stopPriceAtOpen) {
+                        stopFillRaw = bar.getOpen();
+                    } else {
+                        stopFillRaw = stopPrice;
+                    }
+                }
+            }
+
+            double takeProfitFillRaw = 0.0;
+            boolean takeProfitHit = false;
+            if (exitRule.takeProfitPercent() != null) {
+                double targetPrice = position.entryPrice() * (1.0 + exitRule.takeProfitPercent() / 100.0);
+                if (bar.getHigh() >= targetPrice) {
+                    takeProfitHit = true;
+                    takeProfitFillRaw = bar.getOpen() >= targetPrice ? bar.getOpen() : targetPrice;
+                }
+            }
+
+            if (stopHit || takeProfitHit) {
+                boolean chooseStop = stopHit && (executionConfig.conservativeFillMode() || !takeProfitHit);
+                if (!stopHit && takeProfitHit) {
+                    chooseStop = false;
+                }
+                if (stopHit && takeProfitHit && !executionConfig.conservativeFillMode()) {
+                    chooseStop = false;
+                }
+
+                if (chooseStop) {
+                    return new ExitCheckResult(
+                            closeTrade(position, bar.getTimestamp(), stopFillRaw, stopReason, costModel),
+                            highWaterMark
+                    );
+                }
+                return new ExitCheckResult(
+                        closeTrade(position, bar.getTimestamp(), takeProfitFillRaw, "TAKE_PROFIT", costModel),
+                        highWaterMark
+                );
+            }
+
+            if (trailing) {
+                highWaterMark = Math.max(highWaterMark, bar.getClose());
+            }
+        }
+
+        return new ExitCheckResult(null, highWaterMark);
+    }
+
+    private Trade closeTrade(Position position, long exitTimestamp, double exitPrice, String exitReason,
+                             CostModel costModel) {
+        double adjustedExitPrice = costModel.applyExitPrice(exitPrice);
+        double returnPercent = costModel.computeReturnPercent(position.entryPrice(), adjustedExitPrice);
+
         int holdingDays = Math.max(1, (int) ((exitTimestamp - position.entryTimestamp()) / SECONDS_PER_DAY));
         return new Trade(
                 position.symbol(),
                 position.entryTimestamp(),
                 position.entryPrice(),
                 exitTimestamp,
-                exitPrice,
+                adjustedExitPrice,
                 exitReason,
                 returnPercent,
                 holdingDays
         );
     }
 
-    private boolean allEntryConditionsMet(
-            Candlestick bar,
-            Candlestick previousBar,
-            List<FilterRequest> entryConditions,
-            IndicatorContext indicators
-    ) {
-        for (FilterRequest condition : entryConditions) {
-            if (!evaluateCondition(bar, previousBar, condition, indicators)) {
-                return false;
-            }
-        }
-        return true;
-    }
-
-    private boolean evaluateCondition(
-            Candlestick bar,
-            Candlestick previousBar,
-            FilterRequest condition,
-            IndicatorContext indicators
-    ) {
-        String type = condition.getType();
-        FilterParams params = condition.getParams();
-
-        return switch (type) {
-            case "RSI" -> evaluateRsi(bar, (RsiFilterParams) params, indicators);
-            case "MACD" -> evaluateMacd(bar, previousBar, (MacdFilterParams) params, indicators);
-            case "HIGH_VOLUME" -> evaluateHighVolume(bar, (HighVolumeFilterParams) params, indicators);
-            case "PATTERN" -> evaluatePattern(bar, indicators);
-            case "MA_CROSSOVER" -> evaluateMovingAverage(bar, previousBar,
-                    (MovingAverageFilterParams) params, indicators);
-            default -> throw new IllegalArgumentException("Unknown filter type: " + type);
-        };
-    }
-
-    private boolean evaluateRsi(Candlestick bar, RsiFilterParams params, IndicatorContext indicators) {
-        if (indicators.rsiValues() == null) {
-            return false;
-        }
-        Double rsiValue = indicators.rsiValues().get(bar.getTimestamp());
-        if (rsiValue == null) {
-            return false;
-        }
-        double threshold = params.getThreshold();
-        String condition = params.getCondition();
-        return "above".equals(condition) ? rsiValue > threshold : rsiValue < threshold;
-    }
-
-    private boolean evaluateMacd(Candlestick bar, Candlestick previousBar, MacdFilterParams params, IndicatorContext indicators) {
-        if (indicators.macdValues() == null) {
-            return false;
-        }
-        MacdValues current = indicators.macdValues().get(bar.getTimestamp());
-        if (current == null) {
-            return false;
-        }
-
-        String condition = params.getCondition();
-        return switch (condition) {
-            case "above_zero" -> current.macd() > 0;
-            case "below_zero" -> current.macd() < 0;
-            case "histogram_positive" -> current.histogram() > 0;
-            case "histogram_negative" -> current.histogram() < 0;
-            case "crossover_above" -> {
-                if (previousBar == null) yield false;
-                MacdValues prev = indicators.macdValues().get(previousBar.getTimestamp());
-                yield prev != null && current.macd() > current.signal() && prev.macd() <= prev.signal();
-            }
-            case "crossover_below" -> {
-                if (previousBar == null) yield false;
-                MacdValues prev = indicators.macdValues().get(previousBar.getTimestamp());
-                yield prev != null && current.macd() < current.signal() && prev.macd() >= prev.signal();
-            }
-            default -> throw new IllegalArgumentException("Unknown MACD condition: " + condition);
-        };
-    }
-
-    private boolean evaluateHighVolume(Candlestick bar, HighVolumeFilterParams params, IndicatorContext indicators) {
-        if (indicators.avgVolume() <= 0) {
-            return false;
-        }
-        int percentageAbove = params.getPercentageAbove();
-        double threshold = indicators.avgVolume() * (1.0 + percentageAbove / 100.0);
-        return bar.getVolume() >= threshold;
-    }
-
-    private boolean evaluatePattern(Candlestick bar, IndicatorContext indicators) {
-        return indicators.patternTimestamps() != null
-                && indicators.patternTimestamps().contains(bar.getTimestamp());
-    }
-
-    private boolean evaluateMovingAverage(Candlestick bar, Candlestick previousBar,
-                                          MovingAverageFilterParams params, IndicatorContext indicators) {
-        String key = params.getMaType() + "_" + params.getPeriod();
-        Map<Long, Double> maMap = indicators.maValues() != null
-                ? indicators.maValues().get(key) : null;
-        if (maMap == null) return false;
-
-        Double maValue = maMap.get(bar.getTimestamp());
-        if (maValue == null) return false;
-
-        return switch (params.getCondition()) {
-            case "price_above_ma" -> bar.getClose() > maValue;
-            case "price_below_ma" -> bar.getClose() < maValue;
-            case "price_crosses_above_ma" -> {
-                if (previousBar == null) yield false;
-                Double prevMa = maMap.get(previousBar.getTimestamp());
-                yield prevMa != null && previousBar.getClose() <= prevMa && bar.getClose() > maValue;
-            }
-            case "price_crosses_below_ma" -> {
-                if (previousBar == null) yield false;
-                Double prevMa = maMap.get(previousBar.getTimestamp());
-                yield prevMa != null && previousBar.getClose() >= prevMa && bar.getClose() < maValue;
-            }
-            default -> throw new IllegalArgumentException("Unknown MA condition: " + params.getCondition());
-        };
-    }
 }
