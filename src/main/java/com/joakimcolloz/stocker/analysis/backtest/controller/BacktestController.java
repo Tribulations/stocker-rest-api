@@ -106,7 +106,7 @@ public class BacktestController {
 
         Map<String, Object> conservativeRules = Map.of(
                 "stopFirstOnSameBar", true,
-                "gapThroughStopWorstCase", "If price gaps beyond stop on bar open, fill uses worst-case (e.g., min(open, low) for long stops)",
+                "gapThroughStopWorstCase", "If price gaps beyond stop on bar open, fill uses bar open price (conservative realistic gap fill)",
                 "trailingStopUpdate", "Trailing stop high-water-mark updates after bar close using close price (daily and intraday)"
         );
 

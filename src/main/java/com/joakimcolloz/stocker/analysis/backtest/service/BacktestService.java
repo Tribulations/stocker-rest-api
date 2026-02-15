@@ -74,27 +74,17 @@ public class BacktestService {
         long maxLookback = computeMaxLookback(allConditions);
         long extendedStart = request.getStartTimestamp() - maxLookback;
 
-        List<Candlestick> allCandles = marketDataProvider.fetchDailyCandles(
-                request.getSymbols(),
-                extendedStart,
-                request.getEndTimestamp()
-        );
-
         ExecutionConfig executionConfig = request.getExecution() != null
                 ? request.getExecution()
                 : new ExecutionConfig(null, null, null, null, null, null);
 
-        List<IntradayCandlestick> intradayCandles = executionConfig.mode() == ExecutionMode.HYBRID_INTRADAY
-                ? marketDataProvider.fetchIntradayCandles(
-                request.getSymbols(),
-                executionConfig.intradayInterval(),
-                request.getStartTimestamp(),
-                request.getEndTimestamp()
-        )
-                : List.of();
-
-        Map<String, List<Candlestick>> bySymbol = allCandles.stream()
-                .collect(Collectors.groupingBy(Candlestick::getSymbol));
+        List<String> symbols = request.getSymbols();
+        if ((symbols == null || symbols.isEmpty()) && executionConfig.mode() == ExecutionMode.HYBRID_INTRADAY) {
+            throw new IllegalStateException("HYBRID_INTRADAY requires an explicit symbols list");
+        }
+        if (symbols == null || symbols.isEmpty()) {
+            symbols = marketDataProvider.fetchDistinctSymbols();
+        }
 
         boolean needsRsi = needsIndicator(allConditions, "RSI");
         boolean needsMacd = needsIndicator(allConditions, "MACD");
@@ -120,18 +110,29 @@ public class BacktestService {
 
         List<Trade> allTrades = new ArrayList<>();
 
-        for (Map.Entry<String, List<Candlestick>> entry : bySymbol.entrySet()) {
-            String symbol = entry.getKey();
-            List<Candlestick> sortedCandles = entry.getValue().stream()
+        for (String symbol : symbols) {
+            List<Candlestick> sortedCandles = marketDataProvider.fetchDailyCandles(
+                            List.of(symbol),
+                            extendedStart,
+                            request.getEndTimestamp()
+                    ).stream()
                     .sorted(Comparator.comparingLong(Candlestick::getTimestamp))
                     .toList();
 
-            List<IntradayCandlestick> sortedIntraday = intradayCandles.isEmpty()
-                    ? List.of()
-                    : intradayCandles.stream()
-                    .filter(c -> symbol.equals(c.getSymbol()))
-                    .sorted(Comparator.comparingLong(IntradayCandlestick::getTimestamp))
-                    .toList();
+            if (sortedCandles.isEmpty()) {
+                continue;
+            }
+
+            List<IntradayCandlestick> sortedIntraday = executionConfig.mode() == ExecutionMode.HYBRID_INTRADAY
+                    ? marketDataProvider.fetchIntradayCandles(
+                                    List.of(symbol),
+                                    executionConfig.intradayInterval(),
+                                    request.getStartTimestamp(),
+                                    request.getEndTimestamp()
+                            ).stream()
+                            .sorted(Comparator.comparingLong(IntradayCandlestick::getTimestamp))
+                            .toList()
+                    : List.of();
 
             IndicatorContext indicators = buildIndicatorContext(
                     sortedCandles, allConditions,
