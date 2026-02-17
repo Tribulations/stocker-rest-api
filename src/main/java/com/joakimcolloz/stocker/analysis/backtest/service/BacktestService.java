@@ -27,7 +27,6 @@ import com.joakimcolloz.stocker.analysis.indicator.RsiCalculator;
 import com.joakimcolloz.stocker.analysis.pattern.PatternDetector;
 import com.joakimcolloz.stocker.analysis.pattern.PatternRegistry;
 import com.joakimcolloz.stocker.api.entity.Candlestick;
-import com.joakimcolloz.stocker.api.entity.IntradayCandlestick;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
@@ -79,9 +78,6 @@ public class BacktestService {
                 : new ExecutionConfig(null, null, null, null, null, null);
 
         List<String> symbols = request.getSymbols();
-        if ((symbols == null || symbols.isEmpty()) && executionConfig.mode() == ExecutionMode.HYBRID_INTRADAY) {
-            throw new IllegalStateException("HYBRID_INTRADAY requires an explicit symbols list");
-        }
         if (symbols == null || symbols.isEmpty()) {
             symbols = marketDataProvider.fetchDistinctSymbols();
         }
@@ -111,8 +107,9 @@ public class BacktestService {
         List<Trade> allTrades = new ArrayList<>();
 
         for (String symbol : symbols) {
+            List<String> singletonSymbol = List.of(symbol);
             List<Candlestick> sortedCandles = marketDataProvider.fetchDailyCandles(
-                            List.of(symbol),
+                            singletonSymbol,
                             extendedStart,
                             request.getEndTimestamp()
                     ).stream()
@@ -123,16 +120,17 @@ public class BacktestService {
                 continue;
             }
 
-            List<IntradayCandlestick> sortedIntraday = executionConfig.mode() == ExecutionMode.HYBRID_INTRADAY
-                    ? marketDataProvider.fetchIntradayCandles(
-                                    List.of(symbol),
-                                    executionConfig.intradayInterval(),
-                                    request.getStartTimestamp(),
-                                    request.getEndTimestamp()
-                            ).stream()
-                            .sorted(Comparator.comparingLong(IntradayCandlestick::getTimestamp))
-                            .toList()
-                    : List.of();
+            BacktestEngine.IntradayCandlesProvider intradayCandlesProvider = executionConfig.mode() == ExecutionMode.HYBRID_INTRADAY
+                    ? (startInclusive, endExclusive) -> {
+                        long endInclusive = Math.max(startInclusive, endExclusive - 1);
+                        return marketDataProvider.fetchIntradayCandles(
+                                singletonSymbol,
+                                executionConfig.intradayInterval(),
+                                startInclusive,
+                                endInclusive
+                        );
+                    }
+                    : null;
 
             IndicatorContext indicators = buildIndicatorContext(
                     sortedCandles, allConditions,
@@ -141,7 +139,7 @@ public class BacktestService {
             BacktestSeriesInput input = new BacktestSeriesInput(
                     symbol,
                     sortedCandles,
-                    sortedIntraday,
+                    intradayCandlesProvider,
                     request.getStartTimestamp(),
                     request.getEntryConditions(),
                     request.getExitRule(),

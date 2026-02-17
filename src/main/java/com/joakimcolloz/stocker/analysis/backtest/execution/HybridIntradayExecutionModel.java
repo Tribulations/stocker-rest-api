@@ -37,7 +37,7 @@ public class HybridIntradayExecutionModel implements ExecutionModel {
                 input.indicators(),
                 input.entryRule(),
                 hybridCfg,
-                input.intradayCandles(),
+                input.intradayCandlesProvider(),
                 costModel
         );
     }

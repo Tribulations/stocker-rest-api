@@ -28,7 +28,12 @@ public class BacktestEngine {
     private static final long SECONDS_PER_DAY = 86_400L;
     private static final long INTRADAY_BAR_SECONDS = 300L;
 
-    private record ExitCheckResult(Trade trade, double updatedHighWaterMark) {
+    @FunctionalInterface
+    public interface IntradayCandlesProvider {
+        List<IntradayCandlestick> fetch(long startTimestampInclusive, long endTimestampExclusive);
+    }
+
+    record ExitCheckResult(Trade trade, double updatedHighWaterMark) {
     }
 
     record Position(String symbol, long entryTimestamp, double entryPrice) {
@@ -296,10 +301,38 @@ public class BacktestEngine {
         return trades;
     }
 
-    private Trade checkExitDaily(Position position, Candlestick bar, Candlestick previousBar,
-                                ExitRule exitRule, List<FilterRequest> exitConditions,
-                                IndicatorContext indicators, double preBarHighWaterMark, double highWaterMark,
-                                ExecutionConfig executionConfig, CostModel costModel) {
+    public List<Trade> runForSymbol(
+            String symbol,
+            List<Candlestick> sortedCandles,
+            long tradingStartTimestamp,
+            List<FilterRequest> entryConditions,
+            ExitRule exitRule,
+            List<FilterRequest> exitConditions,
+            IndicatorContext indicators,
+            EntryRule entryRule,
+            ExecutionConfig executionConfig,
+            IntradayCandlesProvider intradayCandlesProvider,
+            CostModel costModel
+    ) {
+        return new OnDemandIntradayBacktestRunner(this).run(
+                symbol,
+                sortedCandles,
+                tradingStartTimestamp,
+                entryConditions,
+                exitRule,
+                exitConditions,
+                indicators,
+                entryRule,
+                executionConfig,
+                intradayCandlesProvider,
+                costModel
+        );
+    }
+
+    Trade checkExitDaily(Position position, Candlestick bar, Candlestick previousBar,
+                         ExitRule exitRule, List<FilterRequest> exitConditions,
+                         IndicatorContext indicators, double preBarHighWaterMark, double highWaterMark,
+                         ExecutionConfig executionConfig, CostModel costModel) {
         Trade stopExit = null;
         if (exitRule.stopLossPercent() != null) {
             boolean trailing = Boolean.TRUE.equals(exitRule.trailingStopLoss());
@@ -352,7 +385,7 @@ public class BacktestEngine {
         return null;
     }
 
-    private ExitCheckResult checkExitIntraday(
+    ExitCheckResult checkExitIntraday(
             Position position,
             List<IntradayCandlestick> bars,
             ExitRule exitRule,
@@ -426,8 +459,8 @@ public class BacktestEngine {
         return new ExitCheckResult(null, highWaterMark);
     }
 
-    private Trade closeTrade(Position position, long exitTimestamp, double exitPrice, String exitReason,
-                             CostModel costModel) {
+    Trade closeTrade(Position position, long exitTimestamp, double exitPrice, String exitReason,
+                     CostModel costModel) {
         double adjustedExitPrice = costModel.applyExitPrice(exitPrice);
         double returnPercent = costModel.computeReturnPercent(position.entryPrice(), adjustedExitPrice);
 
