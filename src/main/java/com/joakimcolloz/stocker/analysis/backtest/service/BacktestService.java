@@ -27,7 +27,6 @@ import com.joakimcolloz.stocker.analysis.indicator.RsiCalculator;
 import com.joakimcolloz.stocker.analysis.pattern.PatternDetector;
 import com.joakimcolloz.stocker.analysis.pattern.PatternRegistry;
 import com.joakimcolloz.stocker.api.entity.Candlestick;
-import com.joakimcolloz.stocker.api.entity.IntradayCandlestick;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;

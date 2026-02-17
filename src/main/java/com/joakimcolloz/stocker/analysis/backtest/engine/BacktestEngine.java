@@ -315,231 +315,295 @@ public class BacktestEngine {
             CostModel costModel
     ) {
         List<Trade> trades = new ArrayList<>();
-        Position position = null;
-        PendingOrder pendingOrder = null;
-        double highWaterMark = 0.0;
+        RunState state = new RunState();
 
+        EntryParams entryParams = entryParams(entryRule);
+        boolean useIntraday = executionConfig.mode() == ExecutionMode.HYBRID_INTRADAY && intradayCandlesProvider != null;
+
+        for (int i = 0; i < sortedCandles.size(); i++) {
+            Candlestick bar = sortedCandles.get(i);
+            Candlestick previousBar = i > 0 ? sortedCandles.get(i - 1) : null;
+            IntradayDayAccess intradayAccess = new IntradayDayAccess(useIntraday, intradayCandlesProvider, bar.getTimestamp());
+
+            if (state.position != null) {
+                Trade closed = evaluateExitForDay(state, bar, previousBar, exitRule, exitConditions, indicators,
+                        executionConfig, costModel, intradayAccess);
+                if (closed != null) {
+                    trades.add(closed);
+                    state.position = null;
+                    state.highWaterMark = 0.0;
+                } else {
+                    updateTrailingHighWaterMarkIfNeeded(state, bar, exitRule);
+                }
+            }
+
+            if (state.pendingOrder != null && state.position == null) {
+                Position entered = tryFillPendingOrder(symbol, bar, entryParams, state.pendingOrder, costModel, intradayAccess);
+                if (entered != null) {
+                    state.position = entered;
+                    state.pendingOrder = null;
+                    state.highWaterMark = entered.entryPrice();
+
+                    Trade closed = evaluateExitAfterSameDayEntry(state, bar, previousBar, exitRule, exitConditions, indicators,
+                            executionConfig, costModel, intradayAccess);
+                    if (closed != null) {
+                        trades.add(closed);
+                        state.position = null;
+                        state.highWaterMark = 0.0;
+                    } else {
+                        updateTrailingHighWaterMarkIfNeeded(state, bar, exitRule);
+                    }
+                } else {
+                    state.pendingOrder.barsRemaining--;
+                    if (state.pendingOrder.barsRemaining <= 0) state.pendingOrder = null;
+                }
+            }
+
+            if (state.position == null && state.pendingOrder == null && bar.getTimestamp() >= tradingStartTimestamp) {
+                if (ConditionEvaluator.allEntryConditionsMet(bar, previousBar, entryConditions, indicators)) {
+                    state.pendingOrder = createPendingOrderFromSignal(bar, entryParams);
+                }
+            }
+        }
+
+        if (state.position != null && !sortedCandles.isEmpty()) {
+            Candlestick lastBar = sortedCandles.getLast();
+            trades.add(closeTrade(state.position, lastBar.getTimestamp(), lastBar.getClose(), "END_OF_DATA", costModel));
+        }
+
+        return trades;
+    }
+
+    private static final class RunState {
+        Position position;
+        PendingOrder pendingOrder;
+        double highWaterMark;
+    }
+
+    private record EntryParams(
+            String entryMode,
+            double limitOffsetPercent,
+            double penetrationPercent,
+            int maxBarsToFill,
+            String direction
+    ) {
+    }
+
+    private EntryParams entryParams(EntryRule entryRule) {
         String entryMode = entryRule.entryMode();
         double limitOffsetPercent = entryRule.limitOffsetPercent() != null ? entryRule.limitOffsetPercent() : 0.0;
         double penetrationPercent = entryRule.penetrationPercent() != null ? entryRule.penetrationPercent() : 0.0;
         int maxBarsToFill = entryRule.maxBarsToFill() != null ? entryRule.maxBarsToFill() : 1;
         String direction = entryRule.limitDirection() != null ? entryRule.limitDirection() : "BELOW";
+        return new EntryParams(entryMode, limitOffsetPercent, penetrationPercent, maxBarsToFill, direction);
+    }
 
-        for (int i = 0; i < sortedCandles.size(); i++) {
-            Candlestick bar = sortedCandles.get(i);
-            Candlestick previousBar = i > 0 ? sortedCandles.get(i - 1) : null;
+    private static final class IntradayDayAccess {
+        private final boolean useIntraday;
+        private final IntradayCandlesProvider provider;
+        private final long dayStart;
+        private List<IntradayCandlestick> cached;
 
-            boolean useIntraday = executionConfig.mode() == ExecutionMode.HYBRID_INTRADAY
-                    && intradayCandlesProvider != null;
+        private IntradayDayAccess(boolean useIntraday, IntradayCandlesProvider provider, long dayStart) {
+            this.useIntraday = useIntraday;
+            this.provider = provider;
+            this.dayStart = dayStart;
+        }
 
-            List<IntradayCandlestick> intradayBarsForDay = null;
-            boolean intradayFetched = false;
-
-            java.util.function.Supplier<List<IntradayCandlestick>> getIntradayBarsForDay = () -> {
-                if (!useIntraday) {
-                    return List.of();
-                }
-                if (!intradayFetched) {
-                    intradayBarsForDay = intradayCandlesProvider.fetch(bar.getTimestamp(), bar.getTimestamp() + SECONDS_PER_DAY);
-                    intradayFetched = true;
-                }
-                return intradayBarsForDay == null ? List.of() : intradayBarsForDay;
-            };
-
-            java.util.function.Predicate<List<IntradayCandlestick>> intradaySliceLooksUsable = bars ->
-                    bars != null
-                            && !bars.isEmpty()
-                            && bars.getFirst().getTimestamp() <= (bar.getTimestamp() + INTRADAY_BAR_SECONDS);
-
-            // 1. Check exits
-            if (position != null) {
-                Trade closedTrade;
-                if (useIntraday) {
-                    List<IntradayCandlestick> dayBars = getIntradayBarsForDay.get();
-                    if (intradaySliceLooksUsable.test(dayBars)) {
-                        ExitCheckResult intradayExit = checkExitIntraday(
-                                position,
-                                dayBars,
-                                exitRule,
-                                highWaterMark,
-                                executionConfig,
-                                costModel
-                        );
-                        closedTrade = intradayExit.trade();
-                        highWaterMark = intradayExit.updatedHighWaterMark();
-                    } else {
-                        closedTrade = checkExitDaily(position, bar, previousBar, exitRule, exitConditions, indicators,
-                                highWaterMark, highWaterMark, executionConfig, costModel);
-                    }
-                } else {
-                    closedTrade = checkExitDaily(position, bar, previousBar, exitRule, exitConditions, indicators,
-                            highWaterMark, highWaterMark, executionConfig, costModel);
-                }
-
-                if (closedTrade != null) {
-                    trades.add(closedTrade);
-                    position = null;
-                    highWaterMark = 0.0;
-                } else {
-                    if (Boolean.TRUE.equals(exitRule.trailingStopLoss())) {
-                        highWaterMark = Math.max(highWaterMark, bar.getClose());
-                    }
+        private List<IntradayCandlestick> bars() {
+            if (!useIntraday) {
+                return List.of();
+            }
+            if (cached == null) {
+                cached = provider.fetch(dayStart, dayStart + SECONDS_PER_DAY);
+                if (cached == null) {
+                    cached = List.of();
                 }
             }
+            return cached;
+        }
 
-            // 2. Try to fill pending order
-            if (pendingOrder != null && position == null) {
-                if ("NEXT_BAR_OPEN".equals(entryMode)) {
-                    long entryTs = bar.getTimestamp();
-                    double rawEntryPrice = bar.getOpen();
-                    if (useIntraday) {
-                        List<IntradayCandlestick> dayBars = getIntradayBarsForDay.get();
-                        if (intradaySliceLooksUsable.test(dayBars)) {
-                            IntradayCandlestick first = dayBars.getFirst();
-                            entryTs = first.getTimestamp();
-                            rawEntryPrice = first.getOpen();
-                        }
-                    }
+        private boolean looksUsable() {
+            List<IntradayCandlestick> bars = bars();
+            return !bars.isEmpty() && bars.getFirst().getTimestamp() <= (dayStart + INTRADAY_BAR_SECONDS);
+        }
+    }
 
-                    double entryFill = costModel.applyEntryPrice(rawEntryPrice);
-                    position = new Position(symbol, entryTs, entryFill);
-                    pendingOrder = null;
-                } else { // LIMIT_ORDER
-                    boolean filled = false;
-                    long entryTs = bar.getTimestamp();
-                    double rawEntryPrice = pendingOrder.limitPrice;
+    private Trade evaluateExitForDay(
+            RunState state,
+            Candlestick bar,
+            Candlestick previousBar,
+            ExitRule exitRule,
+            List<FilterRequest> exitConditions,
+            IndicatorContext indicators,
+            ExecutionConfig executionConfig,
+            CostModel costModel,
+            IntradayDayAccess intradayAccess
+    ) {
+        if (intradayAccess.looksUsable()) {
+            ExitCheckResult intradayExit = checkExitIntraday(
+                    state.position,
+                    intradayAccess.bars(),
+                    exitRule,
+                    state.highWaterMark,
+                    executionConfig,
+                    costModel
+            );
+            state.highWaterMark = intradayExit.updatedHighWaterMark();
+            return intradayExit.trade();
+        }
 
-                    if (useIntraday) {
-                        List<IntradayCandlestick> dayBars = getIntradayBarsForDay.get();
-                        if (intradaySliceLooksUsable.test(dayBars)) {
-                            if ("ABOVE".equals(pendingOrder.direction)) {
-                                double fillThreshold = pendingOrder.limitPrice * (1.0 + penetrationPercent / 100.0);
-                                for (IntradayCandlestick iBar : dayBars) {
-                                    if (iBar.getHigh() >= fillThreshold) {
-                                        filled = true;
-                                        entryTs = iBar.getTimestamp();
-                                        rawEntryPrice = iBar.getOpen() >= fillThreshold ? iBar.getOpen() : pendingOrder.limitPrice;
-                                        break;
-                                    }
-                                }
-                            } else {
-                                double fillThreshold = pendingOrder.limitPrice * (1.0 - penetrationPercent / 100.0);
-                                for (IntradayCandlestick iBar : dayBars) {
-                                    if (iBar.getLow() <= fillThreshold) {
-                                        filled = true;
-                                        entryTs = iBar.getTimestamp();
-                                        rawEntryPrice = pendingOrder.limitPrice;
-                                        break;
-                                    }
-                                }
-                            }
-                        }
-                    }
+        return checkExitDaily(state.position, bar, previousBar, exitRule, exitConditions, indicators,
+                state.highWaterMark, state.highWaterMark, executionConfig, costModel);
+    }
 
-                    if (!filled) {
-                        // Fall back to daily-only fill rules
-                        if ("ABOVE".equals(pendingOrder.direction)) {
-                            double fillThreshold = pendingOrder.limitPrice * (1.0 + penetrationPercent / 100.0);
-                            if (bar.getHigh() >= fillThreshold) {
-                                filled = true;
-                                entryTs = bar.getTimestamp();
-                                rawEntryPrice = pendingOrder.limitPrice;
-                            }
-                        } else {
-                            double fillThreshold = pendingOrder.limitPrice * (1.0 - penetrationPercent / 100.0);
-                            if (bar.getLow() <= fillThreshold) {
-                                filled = true;
-                                entryTs = bar.getTimestamp();
-                                rawEntryPrice = pendingOrder.limitPrice;
-                            }
-                        }
-                    }
+    private void updateTrailingHighWaterMarkIfNeeded(RunState state, Candlestick bar, ExitRule exitRule) {
+        if (Boolean.TRUE.equals(exitRule.trailingStopLoss())) {
+            state.highWaterMark = Math.max(state.highWaterMark, bar.getClose());
+        }
+    }
 
-                    if (filled) {
-                        double entryFill = costModel.applyEntryPrice(rawEntryPrice);
-                        position = new Position(symbol, entryTs, entryFill);
-                        pendingOrder = null;
-                    } else {
-                        pendingOrder.barsRemaining--;
-                        if (pendingOrder.barsRemaining <= 0) pendingOrder = null;
-                    }
-                }
-
-                if (position != null) {
-                    highWaterMark = position.entryPrice();
-                }
-
-                // Check exits on the same day where we just entered
-                if (position != null) {
-                    Trade closedTrade;
-                    if (useIntraday) {
-                        List<IntradayCandlestick> dayBars = getIntradayBarsForDay.get();
-                        if (intradaySliceLooksUsable.test(dayBars)) {
-                            int startIdx = 0;
-                            while (startIdx < dayBars.size() && dayBars.get(startIdx).getTimestamp() < position.entryTimestamp()) {
-                                startIdx++;
-                            }
-                            List<IntradayCandlestick> slice = startIdx < dayBars.size() ? dayBars.subList(startIdx, dayBars.size()) : List.of();
-                            if (!slice.isEmpty()) {
-                                ExitCheckResult intradayExit = checkExitIntraday(
-                                        position,
-                                        slice,
-                                        exitRule,
-                                        highWaterMark,
-                                        executionConfig,
-                                        costModel
-                                );
-                                closedTrade = intradayExit.trade();
-                                highWaterMark = intradayExit.updatedHighWaterMark();
-                            } else {
-                                closedTrade = checkExitDaily(position, bar, previousBar, exitRule, exitConditions, indicators,
-                                        highWaterMark, highWaterMark, executionConfig, costModel);
-                            }
-                        } else {
-                            closedTrade = checkExitDaily(position, bar, previousBar, exitRule, exitConditions, indicators,
-                                    highWaterMark, highWaterMark, executionConfig, costModel);
-                        }
-                    } else {
-                        closedTrade = checkExitDaily(position, bar, previousBar, exitRule, exitConditions, indicators,
-                                highWaterMark, highWaterMark, executionConfig, costModel);
-                    }
-
-                    if (closedTrade != null) {
-                        trades.add(closedTrade);
-                        position = null;
-                        highWaterMark = 0.0;
-                    } else {
-                        if (Boolean.TRUE.equals(exitRule.trailingStopLoss())) {
-                            highWaterMark = Math.max(highWaterMark, bar.getClose());
-                        }
-                    }
-                }
+    private Position tryFillPendingOrder(
+            String symbol,
+            Candlestick dailyBar,
+            EntryParams entryParams,
+            PendingOrder pendingOrder,
+            CostModel costModel,
+            IntradayDayAccess intradayAccess
+    ) {
+        if ("NEXT_BAR_OPEN".equals(entryParams.entryMode())) {
+            long entryTs = dailyBar.getTimestamp();
+            double rawEntryPrice = dailyBar.getOpen();
+            if (intradayAccess.looksUsable()) {
+                IntradayCandlestick first = intradayAccess.bars().getFirst();
+                entryTs = first.getTimestamp();
+                rawEntryPrice = first.getOpen();
             }
+            double entryFill = costModel.applyEntryPrice(rawEntryPrice);
+            return new Position(symbol, entryTs, entryFill);
+        }
 
-            // 3. Check entry conditions
-            if (position == null && pendingOrder == null && bar.getTimestamp() >= tradingStartTimestamp) {
-                if (ConditionEvaluator.allEntryConditionsMet(bar, previousBar, entryConditions, indicators)) {
-                    if ("NEXT_BAR_OPEN".equals(entryMode)) {
-                        pendingOrder = new PendingOrder(0, 1, direction);
-                    } else { // LIMIT_ORDER
-                        double limitPrice;
-                        if ("ABOVE".equals(direction)) {
-                            limitPrice = bar.getClose() * (1.0 + limitOffsetPercent / 100.0);
-                        } else {
-                            limitPrice = bar.getClose() * (1.0 - limitOffsetPercent / 100.0);
-                        }
-                        pendingOrder = new PendingOrder(limitPrice, maxBarsToFill, direction);
-                    }
-                }
+        Long entryTs = null;
+        Double rawEntryPrice = null;
+        if (intradayAccess.looksUsable()) {
+            IntradayEntryFill fill = tryFillLimitIntraday(pendingOrder, entryParams.penetrationPercent(), intradayAccess.bars());
+            if (fill != null) {
+                entryTs = fill.entryTimestamp;
+                rawEntryPrice = fill.rawEntryPrice;
             }
         }
 
-        if (position != null && !sortedCandles.isEmpty()) {
-            Candlestick lastBar = sortedCandles.getLast();
-            trades.add(closeTrade(position, lastBar.getTimestamp(), lastBar.getClose(), "END_OF_DATA", costModel));
+        if (entryTs == null) {
+            DailyEntryFill fill = tryFillLimitDaily(pendingOrder, entryParams.penetrationPercent(), dailyBar);
+            if (fill != null) {
+                entryTs = fill.entryTimestamp;
+                rawEntryPrice = fill.rawEntryPrice;
+            }
         }
 
-        return trades;
+        if (entryTs == null || rawEntryPrice == null) {
+            return null;
+        }
+
+        double entryFill = costModel.applyEntryPrice(rawEntryPrice);
+        return new Position(symbol, entryTs, entryFill);
+    }
+
+    private record IntradayEntryFill(long entryTimestamp, double rawEntryPrice) {
+    }
+
+    private record DailyEntryFill(long entryTimestamp, double rawEntryPrice) {
+    }
+
+    private IntradayEntryFill tryFillLimitIntraday(PendingOrder pendingOrder, double penetrationPercent, List<IntradayCandlestick> dayBars) {
+        if ("ABOVE".equals(pendingOrder.direction)) {
+            double fillThreshold = pendingOrder.limitPrice * (1.0 + penetrationPercent / 100.0);
+            for (IntradayCandlestick iBar : dayBars) {
+                if (iBar.getHigh() >= fillThreshold) {
+                    double rawEntryPrice = iBar.getOpen() >= fillThreshold ? iBar.getOpen() : pendingOrder.limitPrice;
+                    return new IntradayEntryFill(iBar.getTimestamp(), rawEntryPrice);
+                }
+            }
+            return null;
+        }
+
+        double fillThreshold = pendingOrder.limitPrice * (1.0 - penetrationPercent / 100.0);
+        for (IntradayCandlestick iBar : dayBars) {
+            if (iBar.getLow() <= fillThreshold) {
+                return new IntradayEntryFill(iBar.getTimestamp(), pendingOrder.limitPrice);
+            }
+        }
+        return null;
+    }
+
+    private DailyEntryFill tryFillLimitDaily(PendingOrder pendingOrder, double penetrationPercent, Candlestick bar) {
+        if ("ABOVE".equals(pendingOrder.direction)) {
+            double fillThreshold = pendingOrder.limitPrice * (1.0 + penetrationPercent / 100.0);
+            if (bar.getHigh() >= fillThreshold) {
+                return new DailyEntryFill(bar.getTimestamp(), pendingOrder.limitPrice);
+            }
+            return null;
+        }
+
+        double fillThreshold = pendingOrder.limitPrice * (1.0 - penetrationPercent / 100.0);
+        if (bar.getLow() <= fillThreshold) {
+            return new DailyEntryFill(bar.getTimestamp(), pendingOrder.limitPrice);
+        }
+        return null;
+    }
+
+    private Trade evaluateExitAfterSameDayEntry(
+            RunState state,
+            Candlestick bar,
+            Candlestick previousBar,
+            ExitRule exitRule,
+            List<FilterRequest> exitConditions,
+            IndicatorContext indicators,
+            ExecutionConfig executionConfig,
+            CostModel costModel,
+            IntradayDayAccess intradayAccess
+    ) {
+        if (intradayAccess.looksUsable()) {
+            List<IntradayCandlestick> dayBars = intradayAccess.bars();
+            int startIdx = firstIndexAtOrAfter(dayBars, state.position.entryTimestamp());
+            if (startIdx < dayBars.size()) {
+                ExitCheckResult intradayExit = checkExitIntraday(
+                        state.position,
+                        dayBars.subList(startIdx, dayBars.size()),
+                        exitRule,
+                        state.highWaterMark,
+                        executionConfig,
+                        costModel
+                );
+                state.highWaterMark = intradayExit.updatedHighWaterMark();
+                return intradayExit.trade();
+            }
+        }
+
+        return checkExitDaily(state.position, bar, previousBar, exitRule, exitConditions, indicators,
+                state.highWaterMark, state.highWaterMark, executionConfig, costModel);
+    }
+
+    private int firstIndexAtOrAfter(List<IntradayCandlestick> bars, long timestamp) {
+        int idx = 0;
+        while (idx < bars.size() && bars.get(idx).getTimestamp() < timestamp) {
+            idx++;
+        }
+        return idx;
+    }
+
+    private PendingOrder createPendingOrderFromSignal(Candlestick bar, EntryParams entryParams) {
+        if ("NEXT_BAR_OPEN".equals(entryParams.entryMode())) {
+            return new PendingOrder(0, 1, entryParams.direction());
+        }
+
+        double limitPrice;
+        if ("ABOVE".equals(entryParams.direction())) {
+            limitPrice = bar.getClose() * (1.0 + entryParams.limitOffsetPercent() / 100.0);
+        } else {
+            limitPrice = bar.getClose() * (1.0 - entryParams.limitOffsetPercent() / 100.0);
+        }
+        return new PendingOrder(limitPrice, entryParams.maxBarsToFill(), entryParams.direction());
     }
 
     private Trade checkExitDaily(Position position, Candlestick bar, Candlestick previousBar,
